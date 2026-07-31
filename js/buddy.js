@@ -44,7 +44,7 @@
     torso: 0,
     neck: 0,
     spine: 0,
-    /* Arms splayed enough to read as arms: hanging dead vertical merges them
+    /* Arms splayed enough to read as arms: hanging perfectly vertical merges them
        into the torso line and he looks like a bundle of sticks. */
     shoulderL: 0.44,
     shoulderR: -0.44,
