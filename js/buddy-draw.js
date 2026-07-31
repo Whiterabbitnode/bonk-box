@@ -324,6 +324,15 @@
       var d = B.decals[i];
       var fade = Math.min(1, d.age * 2.5) * Math.min(1, (d.life - d.age) / 2);
       if (d.kind === 'heart') Bonk.Particles.drawHeart(ctx, d.x, d.y, d.r, fade * 0.75);
+      else if (d.kind === 'scorch') {
+        /* A smudge of pencil where the firework went off, rubbed out slowly. */
+        ctx.save();
+        ctx.globalAlpha = fade * 0.3;
+        for (var k = 0; k < 4; k++) {
+          Bonk.Doodle.circle(ctx, d.x, d.y, d.r * (0.45 + k * 0.18), { color: P.pencil, width: 2.6 - k * 0.4, seed: d.x + k * 31, amp: 3.2 });
+        }
+        ctx.restore();
+      }
     }
   }
 

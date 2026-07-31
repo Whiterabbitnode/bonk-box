@@ -1,0 +1,14 @@
+{
+  "name": "bonk-box-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bonk Box as a small always-on-top desktop toy.",
+  "scripts": {
+    "copy-toy": "./build-frontend.sh",
+    "dev": "./build-frontend.sh && tauri dev",
+    "build": "./build-frontend.sh && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

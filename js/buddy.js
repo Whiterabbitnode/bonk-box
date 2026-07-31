@@ -129,6 +129,9 @@
     ragdollTimer: 0,
 
     facing: 1,
+    walking: 0, // topped up each frame he is asked to walk somewhere
+    walkPhase: 0,
+    walkDir: 1,
     look: { x: 0, y: 0 },
     squash: 0, // squash-and-stretch on the last hit
     squashAngle: 0,
@@ -335,11 +338,21 @@
       var tx = feetX - vx * 3.2; // step into the fall instead of toppling
       var ty = feetY - this.chestAbove * t.height;
 
+      /* Walking is the balance controller aimed slightly ahead of him rather
+         than straight over his feet - which is what walking actually is. Left
+         as-is, the same controller brakes about a third of his speed every
+         step and he shuffles along at a dozen pixels a second. */
+      var walking = this.walking > 0;
+      if (walking) tx = p.chest.position.x + this.walkDir * 46;
+
       var ex = tx - p.chest.position.x;
       var ey = ty - p.chest.position.y;
       var K = Bonk.CONFIG.balanceK;
       var D = Bonk.CONFIG.balanceDamp;
-      var fx = (Bonk.clamp(ex, -70, 70) * K - vx * D) * p.chest.mass * s;
+      /* Much lighter horizontal braking while walking, or the same controller
+         that keeps him upright cancels most of every stride. */
+      var damp = walking ? D * 0.22 : D;
+      var fx = (Bonk.clamp(ex, -70, 70) * K - vx * damp) * p.chest.mass * s;
       var fy = (Bonk.clamp(ey, -80, 80) * K * 1.35 - p.chest.velocity.y * D * 1.2) * p.chest.mass * s;
 
       if (this.grounded > 0) {
@@ -657,6 +670,10 @@
       this.eating = Math.max(0, this.eating - dt);
       this.braced = Math.max(0, this.braced - dt);
       this.tickleGlow = Math.max(0, this.tickleGlow - dt * 2.5);
+      /* The fort keeps this topped up while it wants him walking; when it
+         stops asking, he stops walking. */
+      this.walking = Math.max(0, this.walking - dt);
+      if (this.walking <= 0) this.walkPhase = 0;
       if (this.soggy > 0 && this.soggy < 1.2 && !this.shakeDry) this.shakeDry = 0.9;
       this.shakeDry = Math.max(0, this.shakeDry - dt);
       if (this.soggy > 1.2 && Bonk.Particles && Math.random() < dt * 7) {
@@ -878,6 +895,42 @@
       }
       if (this.cheer > 0 && n !== 'dance') {
         return pose({ shoulderL: 2.3, shoulderR: -2.3, elbowL: -0.3, elbowR: -0.3, height: 1 + Math.abs(Math.sin(st.time * 8)) * 0.04 });
+      }
+
+      /* Walking to fetch a stick, or stomping about a wrecked fort, both
+         override whatever idle he was drifting through. */
+      if (Bonk.Fort && Bonk.Fort.stomp > 0) {
+        var st2 = Math.sin(Bonk.state.time * 13);
+        return pose({
+          height: 0.94 + Math.abs(st2) * 0.06,
+          torso: st2 * 0.08,
+          hipL: 0.1 + Math.max(0, st2) * 1.0,
+          hipR: -0.1 + Math.max(0, -st2) * 1.0,
+          kneeL: 0.04 + Math.max(0, st2) * 1.1,
+          kneeR: 0.04 + Math.max(0, -st2) * 1.1,
+          shoulderL: 0.9,
+          shoulderR: -0.9,
+          elbowL: -1.7,
+          elbowR: -1.7
+        });
+      }
+      if (this.walking > 0) {
+        var w2 = Math.sin(this.walkPhase);
+        var dir2 = this.walkDir || 1;
+        var carrying = Bonk.Fort && Bonk.Fort.carried;
+        return pose({
+          torso: dir2 * 0.12,
+          height: 0.97 + Math.abs(Math.cos(this.walkPhase)) * 0.03,
+          hipL: 0.1 + w2 * 0.6,
+          hipR: -0.1 - w2 * 0.6,
+          kneeL: 0.04 + Math.max(0, -w2) * 0.75,
+          kneeR: 0.04 + Math.max(0, w2) * 0.75,
+          /* Both arms out front when he has a plank; otherwise they swing. */
+          shoulderL: carrying ? (dir2 > 0 ? -1.15 : 1.15) : 0.44 - w2 * 0.5,
+          shoulderR: carrying ? (dir2 > 0 ? -1.15 : 1.15) : -0.44 + w2 * 0.5,
+          elbowL: carrying ? -0.35 : -0.16,
+          elbowR: carrying ? -0.35 : -0.16
+        });
       }
 
       switch (n) {

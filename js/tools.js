@@ -14,15 +14,18 @@
   var TOOLS = {
     hand: { label: 'Hand', price: 0, free: true, blurb: 'Nudge him, or grab a limb and fling.' },
     feather: { label: 'Feather', price: 0, free: true, blurb: 'Tickle. He giggles, and giggles pay.' },
-    beachball: { label: 'Beach ball', price: 0, free: true, blurb: 'Light, bouncy, endlessly boopable.' },
-    cookie: { label: 'Cookie', price: 90, blurb: 'He catches it and eats it. Mends scuffs.' },
-    waterballoon: { label: 'Water balloon', price: 120, blurb: 'Splash. He goes soggy, then shakes dry.' },
+    beachball: { label: 'Beach ball', price: 0, free: true, hurl: true, blurb: 'Light and bouncy. Drag to sling it.' },
+    cookie: { label: 'Cookie', price: 90, hurl: true, blurb: 'He catches it and eats it. Mends scuffs.' },
+    waterballoon: { label: 'Water balloon', price: 120, hurl: true, blurb: 'Splash. He goes soggy, then shakes dry.' },
     trampoline: { label: 'Trampoline', price: 170, place: true, blurb: 'Place it. Happy bounces pay out.' },
+    sticks: { label: 'Bundle of sticks', price: 240, blurb: 'Leave them lying about. He builds a fort.' },
     anvil: { label: 'Anvil', price: 260, blurb: 'Drops from above. Pancake, then boing.' },
     gustfan: { label: 'Gust fan', price: 320, place: true, blurb: 'Place it. He leans in and flaps.' },
-    bowlingball: { label: 'Bowling ball', price: 420, blurb: 'Heavy roller. Rolls where you aim it.' },
+    popper: { label: 'Party popper', price: 380, hurl: true, blurb: 'A little pop and a spray of confetti.' },
+    bowlingball: { label: 'Bowling ball', price: 420, hurl: true, blurb: 'Heavy roller. Drag to send it.' },
     confetti: { label: 'Confetti', price: 560, blurb: 'He dances. Mood goes through the ceiling.' },
     gravityflip: { label: 'Gravity flip', price: 780, blurb: 'Everything floats up. Then it comes back.' },
+    firework: { label: 'Firework', price: 1100, hurl: true, blurb: 'Fizzles, then a big starry burst. He tumbles.' },
     piano: { label: 'Piano', price: 1400, blurb: 'Expensive, spectacular, rains musical notes.' }
   };
 
@@ -34,7 +37,7 @@
     ink_blueprint: { label: 'Blueprint ink', price: 200, type: 'ink', value: 'blueprint', blurb: 'Redraw him in blueprint blue.' }
   };
 
-  var ORDER = ['hand', 'feather', 'beachball', 'cookie', 'waterballoon', 'trampoline', 'anvil', 'gustfan', 'bowlingball', 'confetti', 'gravityflip', 'piano'];
+  var ORDER = ['hand', 'feather', 'beachball', 'cookie', 'waterballoon', 'trampoline', 'sticks', 'anvil', 'gustfan', 'popper', 'bowlingball', 'confetti', 'gravityflip', 'firework', 'piano'];
 
   /* ---- prop definitions ------------------------------------------------ */
   var PROPS = {
@@ -117,6 +120,36 @@
         }
       }
     },
+    /* Celebration toys. They fizzle on a short fuse and then shove everything
+       nearby outward - a party trick, not a hazard. */
+    popper: {
+      make: function (M, x, y) {
+        return M.Bodies.circle(x, y, 12, { restitution: 0.4, friction: 0.4, density: 0.0011, label: 'popper' });
+      },
+      payMul: 0.6,
+      scuffMul: 0.2,
+      fuse: 0.45,
+      burst: { radius: 130, push: 0.011, word: 'POP!', size: 30, confetti: 26, stars: 6, coins: 14, scorch: 0 }
+    },
+    firework: {
+      make: function (M, x, y) {
+        return M.Bodies.circle(x, y, 14, { restitution: 0.35, friction: 0.4, density: 0.0013, label: 'firework' });
+      },
+      payMul: 0.8,
+      scuffMul: 0.25,
+      fuse: 1.05,
+      burst: { radius: 265, push: 0.027, word: 'BOOM', size: 46, confetti: 46, stars: 26, coins: 42, scorch: 46, shake: 0.9 }
+    },
+
+    /* Loose planks. He gathers these and builds himself a fort. */
+    stick: {
+      make: function (M, x, y) {
+        return M.Bodies.rectangle(x, y, 70, 10, { restitution: 0.15, friction: 0.92, frictionStatic: 1.4, density: 0.0013, label: 'stick', chamfer: { radius: 3 } });
+      },
+      payMul: 0.5,
+      scuffMul: 0.4
+    },
+
     trampoline: {
       placeable: true,
       max: 2,
@@ -188,6 +221,7 @@
       M.Composite.add(this.world, body);
 
       var prop = { kind: kind, def: def, body: body, born: Bonk.state.time, erasing: 0, seed: Math.random() * 500, squish: 0, spin: 0 };
+      if (def.fuse) prop.fuse = def.fuse;
       body.prop = prop;
       this.list.push(prop);
       return prop;
@@ -212,11 +246,71 @@
       for (var i = 0; i < copy.length; i++) this.remove(copy[i]);
     },
 
+    /* Everything nearby gets shoved outward, hardest at the middle. */
+    burst: function (prop) {
+      var M = window.Matter;
+      var b = prop.def.burst;
+      var at = { x: prop.body.position.x, y: prop.body.position.y };
+
+      var targets = Bonk.Buddy.bodies.slice();
+      for (var i = 0; i < this.list.length; i++) {
+        var other = this.list[i];
+        if (other !== prop && !other.erasing && !other.body.isStatic) targets.push(other.body);
+      }
+
+      var closest = 1e9;
+      for (var t = 0; t < targets.length; t++) {
+        var body = targets[t];
+        var dx = body.position.x - at.x;
+        var dy = body.position.y - at.y;
+        var d = Math.hypot(dx, dy);
+        if (d > b.radius) continue;
+        closest = Math.min(closest, d);
+        var falloff = 1 - d / b.radius;
+        var inv = 1 / Math.max(d, 6);
+        M.Body.applyForce(body, body.position, {
+          x: dx * inv * b.push * falloff * body.mass,
+          /* Biased upward so things leap rather than merely scatter. */
+          y: (dy * inv - 0.55) * b.push * falloff * body.mass
+        });
+      }
+
+      Bonk.Particles.burstText(at.x, at.y - 26, b.word, b.size);
+      Bonk.Particles.confetti(at.x, at.y, b.confetti);
+      if (b.stars) Bonk.Particles.star(at.x, at.y, b.stars);
+      Bonk.Particles.dust(at.x, at.y, 6, 1.3);
+      if (b.scorch) Bonk.Buddy.decals.push({ kind: 'scorch', x: at.x, y: Math.min(at.y, Bonk.room.bottom - 4), r: b.scorch, age: 0, life: 7 });
+      if (b.shake && Bonk.shakeScreen) Bonk.shakeScreen(b.shake);
+      Bonk.Sound.party();
+      Bonk.Sound.thud(b.word === 'BOOM' ? 1 : 0.5);
+
+      if (closest < b.radius * 0.75) {
+        Bonk.Buddy.goRagdoll(0.7);
+        Bonk.Buddy.addStars(2);
+        Bonk.Buddy.say(Bonk.pick(['WHEE', 'again!', 'my ears', 'festive.']), 1.8);
+        Bonk.addMood(0.12); // startling, but he does enjoy a party
+      }
+      Bonk.pay(b.coins, at);
+      this.erase(prop, true);
+    },
+
     update: function (dt) {
       var M = window.Matter;
       for (var i = this.list.length - 1; i >= 0; i--) {
         var p = this.list[i];
         p.squish *= Math.pow(0.05, dt);
+
+        /* Lit fuse: fizzle, then go off. */
+        if (p.fuse != null && !p.erasing) {
+          p.fuse -= dt;
+          if (Math.random() < dt * 34) {
+            Bonk.Particles.sparkle(p.body.position.x, p.body.position.y - 10, 1);
+          }
+          if (p.fuse <= 0) {
+            this.burst(p);
+            continue;
+          }
+        }
         if (p.erasing) {
           p.erasing += dt * p.eraseSpeed;
           if (p.erasing >= 1) {
@@ -395,6 +489,36 @@
       ctx.restore();
     },
 
+    popper: function (ctx, p, color, w, solid) {
+      var pts = [
+        { x: -7, y: 12 }, { x: 7, y: 12 }, { x: 10, y: -6 }, { x: 0, y: -13 }, { x: -10, y: -6 }, { x: -7, y: 12 }
+      ];
+      var wob = D.wobble(pts, p.seed, 0.7, 7);
+      if (solid > 0.6) D.fillPath(ctx, wob, P.marker, 0.55);
+      D.strokePath(ctx, wob, { color: color, width: w });
+      D.line(ctx, 0, -13, 4, -22, { color: color, width: w * 0.7, seed: p.seed + 4, amp: 0.6, spacing: 5 });
+      if (p.fuse != null) D.star(ctx, 5, -24, 5, Bonk.state.time * 9, { fill: P.highlighter, color: P.marker, width: 1.2 });
+    },
+
+    firework: function (ctx, p, color, w, solid) {
+      var pts = D.rectPoints(-9, -15, 18, 30, p.seed, 0.8);
+      if (solid > 0.6) D.fillPath(ctx, pts, P.marker, 0.6);
+      D.strokePath(ctx, pts, { color: color, width: w });
+      if (solid > 0.6) {
+        D.line(ctx, -9, -5, 9, -5, { color: color, width: 1.6, seed: p.seed + 2, amp: 0.4, spacing: 5 });
+        D.line(ctx, -9, 5, 9, 5, { color: color, width: 1.6, seed: p.seed + 6, amp: 0.4, spacing: 5 });
+      }
+      D.line(ctx, 0, -15, 5, -26, { color: color, width: w * 0.7, seed: p.seed + 9, amp: 0.7, spacing: 5 });
+      if (p.fuse != null) D.star(ctx, 6, -28, 6, Bonk.state.time * 11, { fill: P.highlighter, color: P.marker, width: 1.3 });
+    },
+
+    stick: function (ctx, p, color, w, solid) {
+      var pts = D.rectPoints(-35, -5, 70, 10, p.seed, 0.9);
+      if (solid > 0.6) D.fillPath(ctx, pts, '#C8A87A', 0.6);
+      D.strokePath(ctx, pts, { color: color, width: w * 0.85 });
+      if (solid > 0.6) D.line(ctx, -26, 0, 24, 1, { color: color, width: 1.1, alpha: 0.45, seed: p.seed + 3, amp: 0.8 });
+    },
+
     trampoline: function (ctx, p, color, w, solid) {
       var sag = Math.min(14, p.squish * 22);
       var mat = D.wobble(
@@ -472,8 +596,9 @@
       });
     },
 
-    /* Returns true if the click was consumed (so the hand does not also grab). */
-    use: function (id, x, y) {
+    /* Returns true if the click was consumed (so the hand does not also grab).
+       `vel` arrives when the slingshot launched it rather than a plain click. */
+    use: function (id, x, y, vel) {
       var room = Bonk.room;
       switch (id) {
         case 'hand':
@@ -481,20 +606,41 @@
           return false;
 
         case 'beachball':
-          Props.spawn('beachball', x, y, { x: Bonk.rand(-2, 2), y: 0 });
+          Props.spawn('beachball', x, y, vel || { x: Bonk.rand(-2, 2), y: 0 });
           Bonk.Sound.pop(0.9);
           return true;
+
+        case 'popper':
+          Props.spawn('popper', x, y, vel || { x: 0, y: 1 });
+          Bonk.Sound.pop(1.4);
+          return true;
+
+        case 'firework':
+          Props.spawn('firework', x, y, vel || { x: 0, y: 1 });
+          Bonk.Sound.whoosh();
+          return true;
+
+        case 'sticks': {
+          /* A bundle scattered along the floor for him to find. */
+          for (var n = 0; n < 5; n++) {
+            var sx = Bonk.clamp(x + Bonk.rand(-90, 90), room.left + 50, room.right - 50);
+            Props.spawn('stick', sx, room.bottom - 30 - n * 14, { x: Bonk.rand(-1, 1), y: 0 });
+          }
+          Bonk.Sound.thud(0.4);
+          Bonk.Buddy.say(Bonk.pick(['ooh, materials.', 'building time.', 'mine now.']), 2);
+          return true;
+        }
 
         case 'cookie': {
           var head = Bonk.Buddy.parts.head.position;
           var dir = head.x > x ? 1 : -1;
-          Props.spawn('cookie', x, y, { x: dir * Bonk.rand(3, 6), y: -4 });
+          Props.spawn('cookie', x, y, vel || { x: dir * Bonk.rand(3, 6), y: -4 });
           Bonk.Sound.whoosh();
           return true;
         }
 
         case 'waterballoon':
-          Props.spawn('waterballoon', x, y, { x: 0, y: 3 });
+          Props.spawn('waterballoon', x, y, vel || { x: 0, y: 3 });
           Bonk.Sound.whoosh();
           return true;
 
@@ -512,12 +658,14 @@
           return true;
 
         case 'bowlingball': {
-          var fromLeft = x < (room.left + room.right) / 2;
-          var p = Props.spawn('bowlingball', fromLeft ? room.left + 40 : room.right - 40, room.bottom - 30, {
-            x: fromLeft ? 11 : -11,
-            y: 0
-          });
-          if (p) window.Matter.Body.setAngularVelocity(p.body, fromLeft ? 0.35 : -0.35);
+          var p;
+          if (vel) {
+            p = Props.spawn('bowlingball', x, y, vel);
+          } else {
+            var fromLeft = x < (room.left + room.right) / 2;
+            p = Props.spawn('bowlingball', fromLeft ? room.left + 40 : room.right - 40, room.bottom - 30, { x: fromLeft ? 11 : -11, y: 0 });
+          }
+          if (p) window.Matter.Body.setAngularVelocity(p.body, (vel ? Math.sign(vel.x) || 1 : 1) * 0.35);
           Bonk.Sound.whoosh();
           return true;
         }

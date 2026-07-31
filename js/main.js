@@ -21,7 +21,19 @@
   var gravityFlip = 0;
   var trampolineCooldown = 0;
   var grabbedBuddy = false;
+  var aim = { active: false, x0: 0, y0: 0, x1: 0, y1: 0 };
   var STEP = 1000 / 60;
+
+  /* Slingshot: drag away from the anchor, and it flies the opposite way. */
+  var MAX_LAUNCH = 24;
+  function launchVelocity() {
+    var dx = aim.x0 - aim.x1;
+    var dy = aim.y0 - aim.y1;
+    var len = Math.hypot(dx, dy);
+    if (len < 1) return { x: 0, y: 0 };
+    var power = Math.min(len * 0.075, MAX_LAUNCH);
+    return { x: (dx / len) * power, y: (dy / len) * power };
+  }
 
   var room = (Bonk.room = { left: 0, right: 0, top: 0, bottom: 0 });
 
@@ -172,6 +184,10 @@
       pt.x = p.x;
       pt.y = p.y;
       pt.inside = true;
+      if (aim.active) {
+        aim.x1 = p.x;
+        aim.y1 = p.y;
+      }
     });
 
     canvas.addEventListener('pointerleave', function () {
@@ -187,6 +203,18 @@
       pt.inside = true;
       Bonk.Sound.start();
       var tool = Bonk.state.tool;
+      var def = Bonk.Tools.all[tool];
+
+      /* Throwables go on the slingshot: press to set the anchor, drag back to
+         aim and load, release to let fly. */
+      if (def && def.hurl) {
+        aim.active = true;
+        aim.x0 = Bonk.clamp(p.x, room.left + 30, room.right - 30);
+        aim.y0 = Bonk.clamp(p.y, room.top + 30, room.bottom - 30);
+        aim.x1 = aim.x0;
+        aim.y1 = aim.y0;
+        return;
+      }
       if (tool !== 'hand' && tool !== 'feather') {
         Bonk.Tools.use(tool, Bonk.clamp(p.x, room.left + 30, room.right - 30), Bonk.clamp(p.y, room.top + 30, room.bottom - 30));
       }
@@ -194,6 +222,13 @@
 
     window.addEventListener('pointerup', function () {
       pt.down = false;
+      if (aim.active) {
+        aim.active = false;
+        var v = launchVelocity();
+        /* A press with no meaningful drag is just a drop. */
+        Bonk.Tools.use(Bonk.state.tool, aim.x0, aim.y0, Math.hypot(v.x, v.y) > 1.2 ? v : null);
+        if (Math.hypot(v.x, v.y) > 4) Bonk.Sound.whoosh();
+      }
     });
 
     /* Touch: keep the page from panning under a drag. */
@@ -272,6 +307,8 @@
       var pair = evt.pairs[i];
       var a = pair.bodyA;
       var b = pair.bodyB;
+      Bonk.Fort.wake(a);
+      Bonk.Fort.wake(b);
       var part = a.isBuddy ? a : b.isBuddy ? b : null;
       var other = part === a ? b : a;
       var speed = relSpeed(a, b);
@@ -363,6 +400,8 @@
   };
 
   Bonk.freshPage = function () {
+    aim.active = false;
+    Bonk.Fort.reset();
     Bonk.Props.clear();
     Bonk.Particles.clear();
     Bonk.Buddy.reset((room.left + room.right) / 2, room.bottom);
@@ -480,6 +519,44 @@
     ctx.restore();
   }
 
+  /* The aiming line and a sketchy dotted arc showing where it will land. */
+  function drawAim() {
+    if (!aim.active) return;
+    var v = launchVelocity();
+    var power = Math.hypot(v.x, v.y);
+    if (power < 1.2) return;
+
+    D.line(ctx, aim.x1, aim.y1, aim.x0, aim.y0, { color: P.pencil, width: 1.8, alpha: 0.5, seed: 3, amp: 0.8 });
+
+    /* Ballistic preview at the same step size the engine uses. */
+    var x = aim.x0;
+    var y = aim.y0;
+    var vx = v.x;
+    var vy = v.y;
+    var g = engine.gravity.y * engine.gravity.scale * STEP * STEP;
+    for (var i = 0; i < 90; i++) {
+      x += vx;
+      y += vy;
+      vy += g;
+      if (x < room.left || x > room.right || y > room.bottom) break;
+      if (i % 5 === 0) {
+        var fade = 0.85 * (1 - i / 90);
+        var r = 3.1 - i / 44;
+        ctx.save();
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = P.marker;
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(1.1, r), 0, 6.29);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    /* A little power gauge at the anchor. */
+    var pct = Math.min(1, power / MAX_LAUNCH);
+    D.circle(ctx, aim.x0, aim.y0, 10 + pct * 7, { color: P.marker, width: 2, alpha: 0.75, seed: 21, amp: 1 });
+  }
+
   /* A blank sheet lying over the page, sliding off to the right to reveal the
      fresh one underneath. */
   function drawPageFlip() {
@@ -519,6 +596,7 @@
         guard++;
         Bonk.Buddy.update(STEP / 1000, engine.world);
         Bonk.Props.update(STEP / 1000);
+        Bonk.Fort.update(STEP / 1000);
         M.Engine.update(engine, STEP);
       }
 
@@ -560,9 +638,12 @@
     drawRoom();
     Bonk.BuddyDraw.drawUnder(ctx);
     Bonk.Props.draw(ctx);
+    Bonk.Fort.draw(ctx);
     Bonk.BuddyDraw.draw(ctx);
+    Bonk.Fort.drawOver(ctx);
     Bonk.Particles.draw(ctx);
     ctx.restore();
+    drawAim();
     drawCursor();
     drawPageFlip();
 

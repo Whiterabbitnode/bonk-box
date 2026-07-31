@@ -186,6 +186,26 @@
       if (Bonk.Sound) Bonk.Sound.note(Bonk.pick([392, 440, 523, 587, 659, 784]));
     },
 
+    /* Fuse fizzle: bright specks hopping off a lit popper or firework. */
+    sparkle: function (x, y, count) {
+      spread(count || 3, x, y, function () {
+        return {
+          kind: 'sparkle',
+          x: x + Bonk.rand(-3, 3),
+          y: y + Bonk.rand(-3, 3),
+          vx: Bonk.rand(-2.2, 2.2),
+          vy: Bonk.rand(-3, -0.4),
+          r: Bonk.rand(2, 4.5),
+          life: Bonk.rand(0.25, 0.55)
+        };
+      });
+    },
+
+    /* Hand-lettered "POP!" over a burst, drawn big and gone quickly. */
+    burstText: function (x, y, word, size) {
+      add({ kind: 'burstText', x: x, y: y, word: word, size: size || 34, rot: Bonk.rand(-0.22, 0.22), life: 0.85 });
+    },
+
     /* "+n" flying from the fun to the coin counter. */
     tally: function (x, y, amount) {
       add({
@@ -259,6 +279,15 @@
             p.x += p.vx + Math.sin(p.age * 4 + p.seed) * 0.5;
             p.y += p.vy;
             p.vy += 0.04;
+            break;
+          case 'sparkle':
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.22;
+            p.vx *= 0.96;
+            break;
+          case 'burstText':
+            p.y -= 0.55;
             break;
         }
       }
@@ -338,6 +367,22 @@
           case 'note':
             drawNote(ctx, p.x, p.y, p.r, p.rot, fade);
             break;
+          case 'sparkle':
+            D.star(ctx, p.x, p.y, p.r, p.age * 12 + p.seed, { fill: P.highlighter, color: P.marker, width: 1, alpha: fade });
+            break;
+          case 'burstText': {
+            /* Snaps out to full size, then drifts up and fades. */
+            var pop = f < 0.22 ? f / 0.22 : 1;
+            var scale = 0.45 + pop * 0.55 + f * 0.25;
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rot);
+            ctx.scale(scale, scale);
+            D.text(ctx, p.word, 3, 3, { size: p.size, color: P.ink, alpha: fade * 0.35, weight: 700 });
+            D.text(ctx, p.word, 0, 0, { size: p.size, color: P.marker, alpha: fade, weight: 700 });
+            ctx.restore();
+            break;
+          }
         }
       }
     },
