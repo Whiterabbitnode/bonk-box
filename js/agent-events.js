@@ -62,7 +62,8 @@
     /* The ask. He holds up a sign and offers himself as the outlet. */
     offer: function () {
       var B = Bonk.Buddy;
-      this.ask = { t: 0 };
+      this.hold(16);
+      this.ask = { t: 0, life: 15 };
       document.body.classList.add('reacting');
       B.speech = null;
       B.idle = { name: 'lookaround', t: 0, dur: 6 };
@@ -92,7 +93,15 @@
     update: function (dt) {
       if (this.ask) {
         this.ask.t += dt;
-        if (this.ask.t > 15) this.dismiss(); // he does not nag
+        /* Each ask sets its own lifetime: a heated moment is fleeting, an
+           update offer has to survive you looking away. */
+        if (this.ask.t > (this.ask.life || 15)) {
+          var wasUpdate = this.ask.kind === 'update';
+          this.dismiss();
+          /* An offer nobody answered is not a decision, so it is not deferred
+             to tomorrow - it comes back next launch. */
+          if (wasUpdate) return;
+        }
       }
     },
 
@@ -113,10 +122,18 @@
     /* A newer build exists. He is the one who tells you. */
     updateReady: function (version, url) {
       this.pending = { version: version, url: url };
-      this.ask = { t: 0, kind: 'update' };
+      this.hold(62);
+      this.ask = { t: 0, kind: 'update', life: 60 };
       document.body.classList.add('reacting');
       Bonk.Buddy.speech = null;
       Bonk.Sound.pop(1.3);
+    },
+
+    /* Keep the window from retreating out from under an ask. */
+    hold: function (seconds) {
+      if (window.__TAURI__ && window.__TAURI__.core) {
+        window.__TAURI__.core.invoke('hold_peek', { seconds: seconds }).catch(function () {});
+      }
     },
 
     upToDate: function () {
@@ -137,13 +154,35 @@
     },
 
     updateLater: function () {
+      /* "Later" is the only answer that means tomorrow. */
+      if (window.__TAURI__ && window.__TAURI__.core) {
+        window.__TAURI__.core.invoke('defer_update_check').catch(function () {});
+      }
       this.dismiss();
       Bonk.Buddy.say(Bonk.pick(['fair enough.', 'later then.', 'no rush.']), 2.4);
     },
 
-    /* Hit test for the two drawn buttons, in canvas coordinates. */
-    buttonAt: function (x, y) {
+    /* Hit test for the two drawn buttons.
+       Takes VIEWPORT coordinates and does the conversion itself. Two callers
+       were passing different coordinate spaces into this - one converted, one
+       raw - so a click that was visually on the button missed it, the window
+       expanded instead, and the update button was simply not clickable. One
+       function owning the conversion is the only way that stays fixed. */
+    buttonAt: function (clientX, clientY) {
       if (!this.ask || !this.ask.boxes) return null;
+      var canvas = document.getElementById('page');
+      if (!canvas) return null;
+      var r = canvas.getBoundingClientRect();
+      var x = clientX - r.left;
+      var y = clientY - r.top;
+      var pad = 6; // a doodled button deserves a forgiving edge
+      var b = this.ask.boxes;
+      if (x >= b.yes.x - pad && x <= b.yes.x + b.yes.w + pad && y >= b.yes.y - pad && y <= b.yes.y + b.yes.h + pad) return 'yes';
+      if (x >= b.no.x - pad && x <= b.no.x + b.no.w + pad && y >= b.no.y - pad && y <= b.no.y + b.no.h + pad) return 'no';
+      return null;
+    },
+
+    _unusedButtonAt: function (x, y) {
       var b = this.ask.boxes;
       if (x >= b.yes.x && x <= b.yes.x + b.yes.w && y >= b.yes.y && y <= b.yes.y + b.yes.h) return 'yes';
       if (x >= b.no.x && x <= b.no.x + b.no.w && y >= b.no.y && y <= b.no.y + b.no.h) return 'no';

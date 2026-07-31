@@ -337,7 +337,7 @@
       trail.length = 0;
       recordPointer(p.x, p.y);
       Bonk.Sound.start();
-      var pick = Bonk.Agent.buttonAt(p.x, p.y);
+      var pick = Bonk.Agent.buttonAt(e.clientX, e.clientY);
       if (pick) {
         var isUpdate = Bonk.Agent.ask && Bonk.Agent.ask.kind === 'update';
         if (pick === 'yes') isUpdate ? Bonk.Agent.updateNow() : Bonk.Agent.accept();

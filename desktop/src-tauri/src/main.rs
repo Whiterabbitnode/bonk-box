@@ -246,12 +246,10 @@ fn should_check_today() -> bool {
         .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default();
-    if std::fs::read_to_string(&stamp).map(|s| s.trim() == today).unwrap_or(false) {
-        return false;
-    }
-    let _ = std::fs::create_dir_all(&dir);
-    let _ = std::fs::write(&stamp, &today);
-    true
+    // Deliberately does NOT write the stamp. Looking is not answering: the
+    // stamp is written only when you choose "later", so an offer you missed
+    // comes back next launch instead of vanishing for a day.
+    !std::fs::read_to_string(&stamp).map(|s| s.trim() == today).unwrap_or(false)
 }
 
 fn check_for_updates(app: AppHandle, forced: bool) {
@@ -550,6 +548,39 @@ fn toggle(app: &AppHandle) {
 }
 
 /// Called when you click into the peeking box, or send him away again.
+/// Keep the window up for as long as an ask needs. The 8s retreat used to
+/// undercut a 15s ask, so an offer left the screen halfway through its own
+/// life - in a corner, without focus. An offer nobody can catch is no offer.
+#[tauri::command]
+fn hold_peek(app: AppHandle, seconds: u64) {
+    // The retreat waits for PEEK_SECONDS of quiet, so push the clock forward
+    // to buy the ask the time it asked for.
+    let until = Instant::now() + Duration::from_secs(seconds.saturating_sub(PEEK_SECONDS).min(300));
+    let state = app.state::<PeekState>();
+    let mut guard = match state.last_event.lock() {
+        Ok(g) => g,
+        Err(_) => return,
+    };
+    *guard = until;
+}
+
+/// "Later" is the only answer that defers to tomorrow. An offer that simply
+/// expired unanswered is not a decision, so the stamp is not written and it
+/// comes back next launch.
+#[tauri::command]
+fn defer_update_check(_app: AppHandle) {
+    if let Some(dir) = config_path().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
+        let today = std::process::Command::new("date")
+            .arg("+%Y-%m-%d")
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(dir.join("last-update-check"), today);
+    }
+}
+
 /// He is finished and should leave completely. Called when the ask is answered
 /// or times out. Relying on the retreat thread is not enough: clicking any
 /// button also marks him engaged, which makes that thread bow out without ever
@@ -631,7 +662,7 @@ fn main() {
             user_opened: AtomicBool::new(false),
             last_event: Mutex::new(Instant::now()),
         })
-        .invoke_handler(tauri::generate_handler![set_engaged, apply_update, stand_down])
+        .invoke_handler(tauri::generate_handler![set_engaged, apply_update, stand_down, hold_peek, defer_update_check])
         .setup(move |app| {
             let show_hide = MenuItem::with_id(app, "toggle", "Show / Hide", true, None::<&str>)?;
             let updates = MenuItem::with_id(app, "updates", "Check for Updates", true, None::<&str>)?;
