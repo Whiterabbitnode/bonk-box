@@ -242,6 +242,21 @@
       Bonk.Doodle.line(ctx, -r * 1.02, top + r * 0.16, r * 0.94, top + r * 0.16, { color: color, width: 2.6, seed: 55, amp: 0.7 });
       Bonk.Doodle.star(ctx, -r * 0.12, top - r * 0.62, r * 0.2, Bonk.state.time * 0.6, { fill: P.highlighter, color: color, width: 1.2 });
       Bonk.Doodle.star(ctx, r * 0.24, top - r * 1.12, r * 0.13, -Bonk.state.time * 0.5, { fill: P.highlighter, color: color, width: 1 });
+    } else if (hat === 'crown') {
+      /* Paper crown, for three days running. */
+      var cp = [
+        { x: -r * 0.9, y: top + r * 0.2 },
+        { x: -r * 1.0, y: top - r * 0.85 },
+        { x: -r * 0.42, y: top - r * 0.3 },
+        { x: 0, y: top - r * 1.05 },
+        { x: r * 0.42, y: top - r * 0.3 },
+        { x: r * 1.0, y: top - r * 0.85 },
+        { x: r * 0.9, y: top + r * 0.2 },
+        { x: -r * 0.9, y: top + r * 0.2 }
+      ];
+      Bonk.Doodle.fillPath(ctx, cp, P.highlighter, 0.9);
+      Bonk.Doodle.strokePath(ctx, Bonk.Doodle.wobble(cp, 19, 0.8, 8), { color: color, width: 2.4 });
+      Bonk.Doodle.star(ctx, 0, top - r * 0.12, r * 0.17, Bonk.state.time * 0.4, { fill: P.marker, color: color, width: 1.1 });
     } else if (hat === 'hard') {
       ctx.save();
       ctx.fillStyle = P.highlighter;

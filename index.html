@@ -3,9 +3,31 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Bonk Box</title>
-    <meta name="description" content="A stickman doodle lives on a sketchbook page. Flick him, boop him, feed him cookies. A loving parody of Interactive Buddy (2005)." />
+    <title>Bonk Box — a physics toy for people with AI agents</title>
+    <meta
+      name="description"
+      content="A tiny physics toy where your AI agent lives in a box on your screen. Flick him, launch fireworks, knock over his fort — he always bounces back. Press Option+Command+B when your agent ships a bug."
+    />
     <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#FAF7F2" />
+
+    <!-- So a shared link unfurls with him mid-flight rather than a bare URL. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Bonk Box" />
+    <meta property="og:title" content="Bonk Box — a physics toy for people with AI agents" />
+    <meta
+      property="og:description"
+      content="Your agent. In a box. Bonk him. A stickman doodle on a sketchbook page who bounces off the walls, builds forts, and always gets back up."
+    />
+    <meta property="og:url" content="https://bonk-box-production.up.railway.app/" />
+    <meta property="og:image" content="https://bonk-box-production.up.railway.app/docs/social.png" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="640" />
+    <meta property="og:image:alt" content="A hand-drawn stickman tumbling through the air with stars around his head, captioned Bonk Box." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Bonk Box — a physics toy for people with AI agents" />
+    <meta name="twitter:description" content="Your agent. In a box. Bonk him." />
+    <meta name="twitter:image" content="https://bonk-box-production.up.railway.app/docs/social.png" />
 
     <!-- The only network fetch on the page, and it is cosmetic: everything
          still works offline with the cursive fallback. -->
@@ -52,6 +74,10 @@
           <span id="coinValue">0</span>
           <span class="visually-hidden">doodle-coins</span>
         </div>
+        <div class="streak" id="streak" hidden>
+          <span class="streak-marks" id="streakMarks" aria-hidden="true"></span>
+          <span id="streakLabel">day 1</span>
+        </div>
         <div class="chrome">
           <button id="btnBug" class="btn btn-marker" type="button">he shipped a bug</button>
           <button id="btnReset" class="btn" type="button" title="Clear the props, keep your coins (R)">fresh page</button>
@@ -90,6 +116,7 @@
     <script src="js/buddy-draw.js"></script>
     <script src="js/tools.js"></script>
     <script src="js/fort.js"></script>
+    <script src="js/companions.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/main.js"></script>
   </body>

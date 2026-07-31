@@ -1,8 +1,33 @@
 # Bonk Box
 
-A stickman lives on a page of your sketchbook. Flick him around, drop cartoon
-props on him, tickle him, feed him cookies. He takes it all in good humour, and
-every scuff mends itself.
+**Your agent. In a box. Bonk him.**
+
+A tiny physics toy where a stickman lives on a page of your sketchbook. Flick
+him about, launch fireworks at him, knock over the fort he built. He always
+bounces back.
+
+## Tell your agent to install it
+
+> install bonk-box from github.com/eddiesanjuan/bonk-box
+
+That is the whole thing. Your agent reads [`install.sh`](install.sh), drops the
+app in `/Applications` and opens it. The joke writes itself: your agent installs
+the toy you bonk it with.
+
+Or, if you would rather do it yourself:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eddiesanjuan/bonk-box/main/install.sh | bash
+```
+
+**Or just play it in a browser:** [bonk-box-production.up.railway.app](https://bonk-box-production.up.railway.app)
+
+![Bonk Box in motion](docs/demo.gif)
+
+[![Stars](https://img.shields.io/github/stars/eddiesanjuan/bonk-box?style=social)](https://github.com/eddiesanjuan/bonk-box/stargazers)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2B2B33)](LICENSE)
+[![runs from file://](https://img.shields.io/badge/runs%20from-file%3A%2F%2F-E0533D)](index.html)
+[![no build step](https://img.shields.io/badge/build%20step-none-8A8F98)](index.html)
 
 A loving parody homage to [Interactive Buddy](https://en.wikipedia.org/wiki/Interactive_Buddy)
 (Newgrounds, 2005).
@@ -14,8 +39,12 @@ A loving parody homage to [Interactive Buddy](https://en.wikipedia.org/wiki/Inte
 Three ways, same toy:
 
 - **On the web:** [bonk-box-production.up.railway.app](https://bonk-box-production.up.railway.app)
-- **On your Mac:** a small always-on-top desktop app - see below
+- **On your Mac:** a small always-on-top desktop app — see below
 - **From this folder:** double-click `index.html`. That is the whole install.
+
+Your coins, toys and streak live in your browser (or in the app), on your own
+machine. Nothing is uploaded anywhere. The web version and the desktop app each
+keep their own separate save.
 
 No build step, no server, no npm. It runs straight from `file://` in any modern
 browser. The only thing it fetches from the network is a Google font, and it
@@ -37,6 +66,19 @@ on more toys — water balloon, trampoline, bundle of sticks, anvil, gust fan,
 party popper, bowling ball, confetti, gravity flip, firework, piano — and on
 hats and ink colours. The hard hat is not just a look: head bonks bounce off it
 with a *ting* and leave 78% fewer scuffs.
+
+Come back tomorrow and he hands you a little sack of coins — the buddy you
+spend all day bonking pays your allowance. Keep coming back and the streak
+unlocks things coins cannot buy: a paper crown at three days, a bubble wand at
+a week, gold ink at a fortnight, and at thirty days a little sun that rises in
+his room for him to lie under.
+
+At the far end of the shop are four legendaries, priced to be a proper haul.
+The golden anvil rains some of your coins back out when it lands. The star
+shower fills the room with weather. The bottle rocket takes him for a lap. And
+the most expensive thing in the game is a tiny friend who follows him about,
+helps with the fort and high-fives him — you grind bonk-coins to buy him a
+friend, which is the joke at the top of the ladder.
 
 Buy the **bundle of sticks** and leave them lying about. When he is cheerful and
 nothing else is going on, he will walk over, carry them back one at a time and
@@ -85,6 +127,7 @@ js/buddy.js           ragdoll, muscles, poses, recovery  (no DOM — testable he
 js/buddy-draw.js      drawing him: ink strokes, face, hats, the redraw signature
 js/tools.js           tool catalogue, props, shop prices
 js/fort.js            the fort: gathering, stacking, pride, and the sulk
+js/companions.js      the rocket ride, the tiny friend, the daily gift, the sun
 js/ui.js              tray, shop, gauges, keyboard
 js/main.js            canvas, room, input, collisions, render loop
 vendor/matter.min.js  matter-js 0.20.0, vendored
@@ -173,3 +216,7 @@ have not played the original, play the original.
 
 Physics by [matter-js](https://brm.io/matter-js/). Everything drawn at runtime
 on a canvas; there are no image assets in this repository.
+
+## Star tracker
+
+[![Star History Chart](https://api.star-history.com/svg?repos=eddiesanjuan/bonk-box&type=Date)](https://star-history.com/#eddiesanjuan/bonk-box&Date)

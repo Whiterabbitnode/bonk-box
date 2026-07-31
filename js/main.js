@@ -164,6 +164,19 @@
     Bonk.state.save.visits++;
     Bonk.persist();
 
+    if (Bonk.state.save.friend) {
+      Bonk.Friend.spawn(engine.world, (room.left + room.right) / 2 - 70, room.bottom - 40);
+      Bonk.Buddy.speech = null;
+    }
+
+    /* First visit of a new day: he comes over and hands you something. */
+    var gift = Bonk.rollStreak();
+    if (gift) {
+      window.setTimeout(function () {
+        Bonk.Gift.offer(gift);
+      }, Bonk.state.returning ? 2600 : 3600);
+    }
+
     last = performance.now();
     requestAnimationFrame(frame);
   }
@@ -309,6 +322,10 @@
       var b = pair.bodyB;
       Bonk.Fort.wake(a);
       Bonk.Fort.wake(b);
+      if ((a.isFriend || b.isFriend) && Bonk.Friend.sad <= 0) {
+        var fr = a.isFriend ? a : b;
+        if (fr.speed > 6) Bonk.Friend.bonked();
+      }
       var part = a.isBuddy ? a : b.isBuddy ? b : null;
       var other = part === a ? b : a;
       var speed = relSpeed(a, b);
@@ -399,8 +416,14 @@
     });
   };
 
+  Bonk.onFriendBought = function () {
+    Bonk.Friend.spawn(engine.world, Bonk.Buddy.center().x - 70, room.bottom - 40);
+  };
+
   Bonk.freshPage = function () {
     aim.active = false;
+    Bonk.state.starShower = 0;
+    Bonk.Ride.active = false;
     Bonk.Fort.reset();
     Bonk.Props.clear();
     Bonk.Particles.clear();
@@ -597,6 +620,9 @@
         Bonk.Buddy.update(STEP / 1000, engine.world);
         Bonk.Props.update(STEP / 1000);
         Bonk.Fort.update(STEP / 1000);
+        Bonk.Ride.update(STEP / 1000);
+        Bonk.Friend.update(STEP / 1000);
+        Bonk.Gift.update(STEP / 1000);
         M.Engine.update(engine, STEP);
       }
 
@@ -636,10 +662,14 @@
     ctx.save();
     ctx.translate(shake.x, shake.y);
     drawRoom();
+    Bonk.Sun.draw(ctx);
     Bonk.BuddyDraw.drawUnder(ctx);
     Bonk.Props.draw(ctx);
     Bonk.Fort.draw(ctx);
+    Bonk.Ride.draw(ctx);
     Bonk.BuddyDraw.draw(ctx);
+    Bonk.Friend.draw(ctx);
+    Bonk.Gift.draw(ctx);
     Bonk.Fort.drawOver(ctx);
     Bonk.Particles.draw(ctx);
     ctx.restore();

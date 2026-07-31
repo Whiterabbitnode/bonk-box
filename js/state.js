@@ -19,7 +19,8 @@
   Bonk.INKS = {
     graphite: { label: 'Graphite', color: '#2B2B33' },
     marker: { label: 'Marker Red', color: '#E0533D' },
-    blueprint: { label: 'Blueprint', color: '#2F5D7C' }
+    blueprint: { label: 'Blueprint', color: '#2F5D7C' },
+    gold: { label: 'Gold', color: '#B8860B' }
   };
 
   /* ---- tuning ----------------------------------------------------------
@@ -63,7 +64,11 @@
       ink: 'graphite',
       name: 'your agent',
       muted: false,
-      visits: 0
+      visits: 0,
+      streakDays: 0,
+      lastVisitDate: null,
+      unlocked: [], // streak rewards, which coins cannot buy
+      friend: false
     };
   }
 
@@ -85,6 +90,14 @@
           if (typeof parsed.name === 'string' && parsed.name.trim()) save.name = parsed.name.slice(0, 18);
           if (typeof parsed.muted === 'boolean') save.muted = parsed.muted;
           if (typeof parsed.visits === 'number' && isFinite(parsed.visits)) save.visits = parsed.visits;
+          if (typeof parsed.streakDays === 'number' && isFinite(parsed.streakDays)) save.streakDays = Math.max(0, Math.floor(parsed.streakDays));
+          if (typeof parsed.lastVisitDate === 'string') save.lastVisitDate = parsed.lastVisitDate;
+          if (Array.isArray(parsed.unlocked)) {
+            parsed.unlocked.forEach(function (id) {
+              if (typeof id === 'string' && save.unlocked.indexOf(id) === -1) save.unlocked.push(id);
+            });
+          }
+          if (typeof parsed.friend === 'boolean') save.friend = parsed.friend;
         }
       }
     } catch (err) {
@@ -107,7 +120,9 @@
     tickle: 0,
     reducedMotion: false,
     time: 0,
-    pointer: { x: 0, y: 0, vx: 0, vy: 0, down: false, inside: false }
+    pointer: { x: 0, y: 0, vx: 0, vy: 0, down: false, inside: false },
+    starShower: 0,
+    sunUp: false
   };
   state.returning = state.save.visits > 0;
   Bonk.state = state;
@@ -121,7 +136,53 @@
   };
 
   Bonk.owns = function (id) {
-    return state.save.owned.indexOf(id) !== -1;
+    return state.save.owned.indexOf(id) !== -1 || state.save.unlocked.indexOf(id) !== -1;
+  };
+
+  /* ---- daily streak -----------------------------------------------------
+     Calendar days in the player's own timezone, which is what "come back
+     tomorrow" means to a person. No cheat protection: it is a toy, and the
+     only thing to win is a doodle. */
+  function dayKey(d) {
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+  Bonk.dayKey = dayKey;
+
+  /* Streak rewards, in days. Coins cannot buy any of these. */
+  Bonk.STREAK_REWARDS = [
+    { day: 3, id: 'hat_crown', label: 'Paper crown', blurb: 'Three days running. He has earned it.' },
+    { day: 7, id: 'bubbles', label: 'Bubble wand', blurb: 'A full week. He blows bubbles and chases them.' },
+    { day: 14, id: 'ink_gold', label: 'Gold ink', blurb: 'Two weeks. Redraw him in gold.' },
+    { day: 30, id: 'sun', label: 'A little sun', blurb: 'Thirty days. It rises in his room and he lies under it.' }
+  ];
+
+  /* Called once at start-up. Returns the gift owed for today, if any. */
+  Bonk.rollStreak = function () {
+    var save = state.save;
+    var today = dayKey(new Date());
+    if (save.lastVisitDate === today) return null; // already said hello today
+
+    var yesterday = dayKey(new Date(Date.now() - 86400000));
+    save.streakDays = save.lastVisitDate === yesterday ? save.streakDays + 1 : 1;
+    save.lastVisitDate = today;
+
+    var unlockedNow = [];
+    Bonk.STREAK_REWARDS.forEach(function (r) {
+      if (save.streakDays >= r.day && save.unlocked.indexOf(r.id) === -1) {
+        save.unlocked.push(r.id);
+        unlockedNow.push(r);
+      }
+    });
+
+    Bonk.persist();
+    return {
+      day: save.streakDays,
+      coins: Math.min(300, 50 + 25 * (save.streakDays - 1)),
+      unlocked: unlockedNow
+    };
   };
 
   Bonk.clamp = function (v, lo, hi) {

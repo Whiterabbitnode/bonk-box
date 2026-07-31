@@ -92,21 +92,22 @@ build_from_source() {
 ASSET="$TMP/bonkbox.zip"
 GOT_ASSET=0
 
-if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-  say "fetching the latest release with gh"
+# Plain curl against the public release first: no GitHub account, no gh, no
+# auth. A stranger's agent should be able to run this with nothing installed.
+say "fetching the latest release"
+URL="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
+      | grep -o '"browser_download_url": *"[^"]*\.app\.zip"' \
+      | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')" || true
+if [ -n "${URL:-}" ] && curl -fsSL "$URL" -o "$ASSET" 2>/dev/null; then
+  GOT_ASSET=1
+fi
+
+# Only if that failed, try gh - it can see things curl cannot.
+if [ "$GOT_ASSET" -eq 0 ] && command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+  say "trying again with gh"
   if gh release download --repo "$REPO" --pattern "*.app.zip" --dir "$TMP" --clobber >/dev/null 2>&1; then
     found="$(find "$TMP" -maxdepth 1 -name "*.app.zip" -print -quit)"
     if [ -n "$found" ]; then mv "$found" "$ASSET"; GOT_ASSET=1; fi
-  fi
-fi
-
-if [ "$GOT_ASSET" -eq 0 ]; then
-  say "looking for a public release asset"
-  URL="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
-        | grep -o '"browser_download_url": *"[^"]*\.app\.zip"' \
-        | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')" || true
-  if [ -n "${URL:-}" ] && curl -fsSL "$URL" -o "$ASSET" 2>/dev/null; then
-    GOT_ASSET=1
   fi
 fi
 

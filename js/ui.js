@@ -24,6 +24,14 @@
     firework: '<rect x="9" y="9" width="6" height="12" rx="1.5"/><path d="M12 9V5"/><path d="M12 5 15 2"/><path d="M4.5 12H2M6 7 4 5M18 7l2-2M19.5 12H22"/>',
 
     hat_party: '<path d="M12 3 5.5 19.5h13L12 3Z"/><circle cx="12" cy="2.6" r="1.7"/><path d="M8.4 13.5 15 11"/>',
+    hat_crown: '<path d="M4 17.5 3 7l5 4 4-6 4 6 5-4-1 10.5Z"/><path d="M4 20.5h16"/>',
+    ink_gold: '<path d="m12 3 4.2 8.4L12 21l-4.2-9.6L12 3Z"/><path d="M12 11.6V17"/><path d="m19 3 .6 1.5L21 5l-1.4.6L19 7l-.6-1.4L17 5l1.4-.5Z"/>',
+    goldanvil: '<path d="M3 6.5h12.5l3.5 2.2-3.5 2.2h-3.8l-.4 3 3.2 2.1v3.5H7.5v-3.5l3.2-2.1-.4-3H3V6.5Z"/><path d="m20 3 .6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6Z"/>',
+    starshower: '<path d="m6 3 .8 1.9L8.7 5.7 6.8 6.5 6 8.4 5.2 6.5 3.3 5.7l1.9-.8Z"/><path d="m17 6 .8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8Z"/><path d="m11 12 .8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8Z"/><path d="M4 14v6M9 18v3M17 15v6M21 17v4"/>',
+    rocketride: '<path d="M12 2c2.4 2.4 3.6 5.2 3.6 8.4V15h-7.2v-4.6C8.4 7.2 9.6 4.4 12 2Z"/><path d="M8.4 12 5 15.5l2.5.6M15.6 12 19 15.5l-2.5.6"/><path d="M10.5 18c.6 2 1 3.2 1.5 4 .5-.8.9-2 1.5-4"/>',
+    friend: '<circle cx="8" cy="6" r="3"/><path d="M8 9v6M8 10.5 5 13M8 10.5l3 2.5M8 15l-2.5 5M8 15l2.5 5"/><circle cx="17.5" cy="9" r="2.2"/><path d="M17.5 11.2v4M17.5 12.2 15.5 14M17.5 12.2l2 1.8M17.5 15.2 16 19M17.5 15.2 19 19"/>',
+    bubbles: '<circle cx="9" cy="14" r="4.5"/><circle cx="16.5" cy="8.5" r="3"/><circle cx="18.5" cy="16" r="2"/><path d="M7.2 12.4a2 2 0 0 1 1.6-1.2"/>',
+    sun: '<circle cx="12" cy="12" r="5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19"/>',
     hat_wizard: '<path d="M13.5 2.5 6.5 17h12l-5-14.5Z"/><path d="M3.5 17h17"/><path d="m11.5 8.5.6 1.3 1.4.2-1 1 .2 1.4-1.2-.7-1.3.7.3-1.4-1-1 1.4-.2Z"/>',
     hat_hard: '<path d="M4.5 16.5a7.5 7.5 0 0 1 15 0"/><path d="M2.5 16.5h19"/><path d="M12 9v7.5"/>',
     ink_marker: '<path d="m12 3 4.2 8.4L12 21l-4.2-9.6L12 3Z"/><path d="M12 11.6V17"/>',
@@ -38,6 +46,7 @@
   var lastCoins = -1;
   var lastMood = -1;
   var lastScuffs = -1;
+  var lastStreak = -1;
   var popTimer = 0;
 
   function moodWord(m) {
@@ -69,6 +78,9 @@
       els.scuffRead = document.getElementById('scuffRead');
       els.name = document.getElementById('nameInput');
       els.mute = document.getElementById('btnMute');
+      els.streak = document.getElementById('streak');
+      els.streakMarks = document.getElementById('streakMarks');
+      els.streakLabel = document.getElementById('streakLabel');
       els.shopBtn = document.getElementById('btnShop');
 
       els.name.value = Bonk.state.save.name;
@@ -205,10 +217,11 @@
       }
 
       function card(id, def, owned, equipped, onBuy) {
+        var tier = def.tier || 'everyday';
         var b = document.createElement('button');
         b.type = 'button';
-        b.className = 'card' + (owned ? ' owned' : '') + (equipped ? ' equipped' : '');
-        b.disabled = !owned && save.coins < def.price;
+        b.className = 'card tier-' + tier + (owned ? ' owned' : '') + (equipped ? ' equipped' : '');
+        b.disabled = tier === 'streak' ? !owned : !owned && save.coins < def.price;
 
         var top = document.createElement('div');
         top.className = 'card-top';
@@ -224,7 +237,12 @@
 
         var price = document.createElement('span');
         price.className = 'card-price';
-        price.textContent = owned ? (equipped ? 'wearing it' : def.type ? 'tap to wear' : 'in your tray') : def.price + ' coins';
+        if (tier === 'streak') {
+          price.textContent = owned ? (equipped ? 'wearing it' : def.type ? 'tap to wear' : 'in your tray') : 'day ' + def.streakDay;
+          if (!owned) price.className += ' card-locked';
+        } else {
+          price.textContent = owned ? (equipped ? 'wearing it' : def.type ? 'tap to wear' : 'in your tray') : def.price.toLocaleString() + ' coins';
+        }
 
         b.appendChild(top);
         b.appendChild(blurb);
@@ -233,23 +251,46 @@
         frag.appendChild(b);
       }
 
-      section('toys');
-      Bonk.Tools.order.forEach(function (id) {
-        var def = Bonk.Tools.all[id];
-        if (def.free) return;
-        var owned = Bonk.owns(id);
-        card(id, def, owned, false, function () {
-          UI.buyTool(id);
+      /* Toys, grouped by how special they are. */
+      [
+        ['toys', 'everyday'],
+        ['the good stuff', 'fancy'],
+        ['legendary', 'legendary']
+      ].forEach(function (group) {
+        var ids = Bonk.Tools.order.filter(function (id) {
+          var d = Bonk.Tools.all[id];
+          return !d.free && (d.tier || 'everyday') === group[1];
+        });
+        if (!ids.length) return;
+        section(group[0]);
+        ids.forEach(function (id) {
+          card(id, Bonk.Tools.all[id], Bonk.owns(id), false, function () {
+            UI.buyTool(id);
+          });
         });
       });
 
       section('how he looks');
       Object.keys(Bonk.Tools.skins).forEach(function (id) {
         var def = Bonk.Tools.skins[id];
+        if (def.tier === 'streak') return;
         var owned = Bonk.owns(id);
         var equipped = def.type === 'hat' ? save.hat === def.value : save.ink === def.value;
         card(id, def, owned, equipped, function () {
           UI.buySkin(id);
+        });
+      });
+
+      /* Streak rewards. Coins cannot buy these - only days can. */
+      section('for coming back');
+      Bonk.STREAK_REWARDS.forEach(function (r) {
+        var def = Bonk.Tools.skins[r.id] || Bonk.Tools.all[r.id] || { label: r.label, blurb: r.blurb };
+        var owned = Bonk.owns(r.id);
+        var equipped = def.type === 'hat' ? save.hat === def.value : def.type === 'ink' ? save.ink === def.value : false;
+        card(r.id, { label: def.label || r.label, blurb: def.blurb || r.blurb, tier: 'streak', streakDay: r.day, type: def.type, value: def.value }, owned, equipped, function () {
+          if (!owned) return;
+          if (def.type) UI.buySkin(r.id);
+          else UI.selectTool(r.id);
         });
       });
 
@@ -260,8 +301,14 @@
     buyTool: function (id) {
       if (Bonk.owns(id)) return;
       var def = Bonk.Tools.all[id];
+      if (def.tier === 'streak') return; // days only
       if (!Bonk.spend(def.price)) return;
       Bonk.state.save.owned.push(id);
+      /* The friend is a companion, not a tool: he turns up and stays. */
+      if (id === 'friend') {
+        Bonk.state.save.friend = true;
+        if (Bonk.onFriendBought) Bonk.onFriendBought();
+      }
       Bonk.persist();
       Bonk.Sound.start();
       Bonk.Sound.party();
@@ -326,6 +373,23 @@
           if (!Bonk.owns(id) && st.save.coins >= all.skins[id].price) canBuy = true;
         });
         els.shopBtn.classList.toggle('nudge', canBuy);
+      }
+
+      if (force || st.save.streakDays !== lastStreak) {
+        lastStreak = st.save.streakDays;
+        if (lastStreak > 0) {
+          els.streak.hidden = false;
+          /* Four uprights and a slash through them, like a real wall tally. */
+          var n = Math.min(lastStreak, 30);
+          var marks = '';
+          for (var g = 0; g < Math.floor(n / 5); g++) marks += '\u0336IIII ';
+          marks += 'I'.repeat(n % 5);
+          els.streakMarks.textContent = marks.trim();
+          els.streakLabel.textContent = 'day ' + lastStreak;
+          els.streak.title = lastStreak + ' days in a row. Keep coming back.';
+        } else {
+          els.streak.hidden = true;
+        }
       }
 
       if (force || Math.abs(st.mood - lastMood) > 0.02) {
