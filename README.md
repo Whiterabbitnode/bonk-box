@@ -306,12 +306,17 @@ own.
 <!-- Eddie: add the donate link here, and uncomment the matching line in
      .github/FUNDING.yml to light up the Sponsor button. -->
 
-## Star History
+## Stars
 
-<a href="https://www.star-history.com/?type=date&repos=eddiesanjuan%2Fbonk-box">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=eddiesanjuan/bonk-box&type=date&theme=dark&legend=top-left&sealed_token=9MbawrdyBSe_BPEi0ClhwgjBlOi7yNFCL-lteaaJWw2ySGcto6Dl7Q6K56xRd8U80TLY6g1RhyUyyDepaHSogl8MxdPEM6FP26GtmOknySYNoJSAQ1LVB3CpzNZppW-IG6i1fmtJzdj9_Q__GAOrCpXM2YzhGqlprybSrZw3zseeWIRBc-ILIlHd__Hz" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=eddiesanjuan/bonk-box&type=date&legend=top-left&sealed_token=9MbawrdyBSe_BPEi0ClhwgjBlOi7yNFCL-lteaaJWw2ySGcto6Dl7Q6K56xRd8U80TLY6g1RhyUyyDepaHSogl8MxdPEM6FP26GtmOknySYNoJSAQ1LVB3CpzNZppW-IG6i1fmtJzdj9_Q__GAOrCpXM2YzhGqlprybSrZw3zseeWIRBc-ILIlHd__Hz" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=eddiesanjuan/bonk-box&type=date&legend=top-left&sealed_token=9MbawrdyBSe_BPEi0ClhwgjBlOi7yNFCL-lteaaJWw2ySGcto6Dl7Q6K56xRd8U80TLY6g1RhyUyyDepaHSogl8MxdPEM6FP26GtmOknySYNoJSAQ1LVB3CpzNZppW-IG6i1fmtJzdj9_Q__GAOrCpXM2YzhGqlprybSrZw3zseeWIRBc-ILIlHd__Hz" />
- </picture>
-</a>
+[![Stars](https://img.shields.io/github/stars/eddiesanjuan/bonk-box?style=social)](https://github.com/eddiesanjuan/bonk-box/stargazers)
+
+[Star history &rarr;](https://www.star-history.com/?type=date&repos=eddiesanjuan%2Fbonk-box&sealed_token=9MbawrdyBSe_BPEi0ClhwgjBlOi7yNFCL-lteaaJWw2ySGcto6Dl7Q6K56xRd8U80TLY6g1RhyUyyDepaHSogl8MxdPEM6FP26GtmOknySYNoJSAQ1LVB3CpzNZppW-IG6i1fmtJzdj9_Q__GAOrCpXM2YzhGqlprybSrZw3zseeWIRBc-ILIlHd__Hz)
+
+<!-- The star-history charts were embedded as images here, both the plain one
+     and the sealed-token one. As of 2026-07-31 both return HTTP 500 to a
+     logged-out visitor ("timeout of 10000ms exceeded"), so they rendered as
+     broken images for anyone arriving at the repo. A broken image is worse
+     than no chart, so the chart is now a link you can click - the token is
+     preserved in it - and the badge above carries the star count, which is
+     still public through the plain repos API. Re-embed if the service
+     recovers. -->

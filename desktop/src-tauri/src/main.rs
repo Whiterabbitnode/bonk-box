@@ -44,6 +44,9 @@ impl Drop for SlideGuard {
 struct PeekState {
     sliding: AtomicBool,
     engaged: AtomicBool,
+    /// True only when YOU opened him - hotkey, bonk, or clicking into a peek.
+    /// Everything else is a visit he pays himself, and those must not linger.
+    user_opened: AtomicBool,
     last_event: Mutex<Instant>,
 }
 
@@ -432,6 +435,9 @@ fn peek(app: &AppHandle, kind: &str) {
 
     // If the app was properly hidden, bring the window back WITHOUT activating
     // it: no app.show(), no set_focus. Ordering it front is enough to be seen.
+    app.state::<PeekState>()
+        .user_opened
+        .store(false, Ordering::SeqCst);
     // Shrink first, so the perch is computed for the small box.
     set_compact(app, true);
     if !window.is_visible().unwrap_or(false) {
@@ -440,7 +446,6 @@ fn peek(app: &AppHandle, kind: &str) {
         }
         let _ = window.show();
     }
-    ensure_on_screen(app);
 
     let (_, auto_focus) = read_config();
     if auto_focus {
@@ -518,9 +523,12 @@ fn toggle(app: &AppHandle) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
+    let state = app.state::<PeekState>();
     if window.is_visible().unwrap_or(false) {
+        state.user_opened.store(false, Ordering::SeqCst);
         let _ = window.hide();
     } else {
+        state.user_opened.store(true, Ordering::SeqCst);
         // On macOS, hiding the only window also tucks the application away, and
         // window.show() on its own will not bring it back - the app has to be
         // unhidden first or the hotkey looks like it only works once. Taking
@@ -548,10 +556,38 @@ fn stand_down(app: AppHandle) {
     let state = app.state::<PeekState>();
     state.engaged.store(false, Ordering::SeqCst);
     state.sliding.store(false, Ordering::SeqCst);
+    state.user_opened.store(false, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
+        // Resize only once he is out of sight, then leave him somewhere sane
+        // so a later show can never reveal a window hanging off the edge.
+        set_compact(&app, false);
+        if let Some(perch) = perch_for(&app) {
+            let _ = window.set_position(perch.shown);
+        }
+        ensure_on_screen(&app);
     }
-    set_compact(&app, false);
+}
+
+/// The invariant, enforced once a second: if you did not open him, and he is
+/// not mid-slide and not engaged, he is not on your screen. Every dismissal
+/// path already hides him; this is what makes "gone" true even down a path
+/// nobody thought of, which is how the sliver survived three fixes.
+fn watch_visibility(app: AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_millis(1000));
+        let Some(window) = app.get_webview_window("main") else { return };
+        let state = app.state::<PeekState>();
+        if state.user_opened.load(Ordering::SeqCst)
+            || state.sliding.load(Ordering::SeqCst)
+            || state.engaged.load(Ordering::SeqCst)
+        {
+            continue;
+        }
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+        }
+    });
 }
 
 #[tauri::command]
@@ -560,6 +596,7 @@ fn set_engaged(app: AppHandle, engaged: bool) {
     state.engaged.store(engaged, Ordering::SeqCst);
     if engaged {
         // You clicked into him, so he gets the whole box and may take focus.
+        state.user_opened.store(true, Ordering::SeqCst);
         set_compact(&app, false);
         if let Some(m) = primary(&app) {
             if let Some(window) = app.get_webview_window("main") {
@@ -588,6 +625,7 @@ fn main() {
         .manage(PeekState {
             sliding: AtomicBool::new(false),
             engaged: AtomicBool::new(false),
+            user_opened: AtomicBool::new(false),
             last_event: Mutex::new(Instant::now()),
         })
         .invoke_handler(tauri::generate_handler![set_engaged, apply_update, stand_down])
@@ -647,6 +685,7 @@ fn main() {
             std::thread::spawn(move || serve(handle, port));
 
             check_for_updates(app.handle().clone(), false);
+            watch_visibility(app.handle().clone());
 
             Ok(())
         })
