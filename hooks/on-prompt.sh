@@ -22,12 +22,19 @@ except Exception:
 ' 2>/dev/null)
 [ -z "$prompt" ] && exit 0
 
-lower=$(printf '%s' "$prompt" | tr "[:upper:]" "[:lower:]")
+# WHOLE WORDS ONLY. A substring match here is catastrophic for manners: "hell"
+# lives inside "shell" and "hello", so every ordinary coding prompt looked like
+# rage and he asked to be bonked after everything. Punctuation becomes spaces
+# and each word is matched between spaces, which also keeps multi-word phrases
+# working and needs no regex escaping.
+padded=" $(printf '%s' "$prompt" | tr '[:upper:]' '[:lower:]' | tr -c '[:alnum:]' ' ' | tr -s ' ') "
 while IFS= read -r word; do
   case "$word" in ''|'#'*) continue ;; esac
-  if printf '%s' "$lower" | grep -qF -- "$word"; then
-    "$here/bonk-event.sh" heated
-    break
-  fi
+  case "$padded" in
+    *" $word "*)
+      "$here/bonk-event.sh" heated
+      break
+      ;;
+  esac
 done < "$words"
 exit 0

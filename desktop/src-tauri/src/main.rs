@@ -506,6 +506,10 @@ fn peek(app: &AppHandle, kind: &str) {
             let _ = window.set_position(PhysicalPosition::new(x as i32, perch.shown.y));
             std::thread::sleep(Duration::from_millis(12));
         }
+        // Actually hide, rather than leaving it parked at the edge. "Gone"
+        // has to mean zero pixels, and hiding also means the window can never
+        // be left living outside every screen.
+        let _ = window.hide();
         let _ = app.emit("bonk-retreat", ());
     });
 }
@@ -535,6 +539,21 @@ fn toggle(app: &AppHandle) {
 }
 
 /// Called when you click into the peeking box, or send him away again.
+/// He is finished and should leave completely. Called when the ask is answered
+/// or times out. Relying on the retreat thread is not enough: clicking any
+/// button also marks him engaged, which makes that thread bow out without ever
+/// retreating - which is exactly why he used to linger after "I'm calm".
+#[tauri::command]
+fn stand_down(app: AppHandle) {
+    let state = app.state::<PeekState>();
+    state.engaged.store(false, Ordering::SeqCst);
+    state.sliding.store(false, Ordering::SeqCst);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+    set_compact(&app, false);
+}
+
 #[tauri::command]
 fn set_engaged(app: AppHandle, engaged: bool) {
     let state = app.state::<PeekState>();
@@ -571,7 +590,7 @@ fn main() {
             engaged: AtomicBool::new(false),
             last_event: Mutex::new(Instant::now()),
         })
-        .invoke_handler(tauri::generate_handler![set_engaged, apply_update])
+        .invoke_handler(tauri::generate_handler![set_engaged, apply_update, stand_down])
         .setup(move |app| {
             let show_hide = MenuItem::with_id(app, "toggle", "Show / Hide", true, None::<&str>)?;
             let updates = MenuItem::with_id(app, "updates", "Check for Updates", true, None::<&str>)?;

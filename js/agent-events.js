@@ -70,7 +70,7 @@
     },
 
     accept: function () {
-      this.dismiss();
+      this.dismiss(true); // you want him: he stays
       var B = Bonk.Buddy;
       Bonk.state.tool = 'hand';
       if (Bonk.UI) Bonk.UI.selectTool('hand');
@@ -98,10 +98,16 @@
 
     /* Clear the ask completely - sign, buttons, hit boxes, chrome fade. A
        half-dismissed ask leaves invisible buttons on the page. */
-    dismiss: function () {
+    dismiss: function (stayOpen) {
       this.ask = null;
       this.pending = null;
       document.body.classList.remove('reacting');
+      /* Unless you chose to keep playing with him, he leaves entirely. */
+      if (!stayOpen && window.__TAURI__ && window.__TAURI__.core) {
+        window.setTimeout(function () {
+          window.__TAURI__.core.invoke('stand_down');
+        }, 900);
+      }
     },
 
     /* A newer build exists. He is the one who tells you. */
@@ -120,7 +126,7 @@
     updateNow: function () {
       var B = Bonk.Buddy;
       var p = this.pending;
-      this.dismiss();
+      this.dismiss(true); // he is about to relaunch anyway
       B.say('back in a moment...', 6);
       B.idle = { name: 'wave', t: 0, dur: 3 };
       if (p && window.__TAURI__ && window.__TAURI__.core) {
@@ -228,8 +234,12 @@
         self.dismiss();
       });
       /* Any click into the window counts as engaging with him. */
-      window.addEventListener('pointerdown', function () {
-        if (T.core) T.core.invoke('set_engaged', { engaged: true });
+      window.addEventListener('pointerdown', function (e) {
+        /* Answering the ask is not the same as settling in to play - the
+           button handlers decide what happens next, so do not mark him
+           engaged out from under them. */
+        var onButton = self.ask && self.buttonAt(e.clientX, e.clientY);
+        if (!onButton && T.core) T.core.invoke('set_engaged', { engaged: true });
       });
     }
   };
