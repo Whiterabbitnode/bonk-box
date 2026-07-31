@@ -217,6 +217,19 @@ have not played the original, play the original.
 Physics by [matter-js](https://brm.io/matter-js/). Everything drawn at runtime
 on a canvas; there are no image assets in this repository.
 
+## Buy him a cookie
+
+Bonk Box is free, and it stays free. There is nothing to unlock with money and
+nothing to subscribe to — the only currency here is doodle-coins, and you get
+those by bonking him.
+
+If it made you laugh and you feel like buying him a cookie anyway, there will
+be a link right here once we set one up. No pressure at all. He mends on his
+own.
+
+<!-- Eddie: add the donate link here, and uncomment the matching line in
+     .github/FUNDING.yml to light up the Sponsor button. -->
+
 ## Star tracker
 
 [![Star History Chart](https://api.star-history.com/svg?repos=eddiesanjuan/bonk-box&type=Date)](https://star-history.com/#eddiesanjuan/bonk-box&Date)

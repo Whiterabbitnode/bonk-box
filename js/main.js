@@ -21,6 +21,7 @@
   var gravityFlip = 0;
   var trampolineCooldown = 0;
   var grabbedBuddy = false;
+  var grabSuppressed = false; // stops an instant re-grab after an auto-release
   var aim = { active: false, x0: 0, y0: 0, x1: 0, y1: 0 };
   var STEP = 1000 / 60;
 
@@ -251,6 +252,9 @@
       pt.y = p.y;
       pt.inside = true;
       recordPointer(p.x, p.y);
+      if (grabbedBuddy && (p.x < room.left || p.x > room.right || p.y < room.top || p.y > room.bottom)) {
+        releaseGrab();
+      }
       if (aim.active) {
         aim.x1 = p.x;
         aim.y1 = p.y;
@@ -260,6 +264,8 @@
     canvas.addEventListener('pointerleave', function () {
       pt.inside = false;
       pt.down = false;
+      /* Never leave him hanging off a constraint the cursor has abandoned. */
+      releaseGrab();
     });
 
     canvas.addEventListener('pointerdown', function (e) {
@@ -285,6 +291,7 @@
         return;
       }
       if (tool === 'hand') {
+        grabSuppressed = false;
         grabNearestPart(p);
         return;
       }
@@ -295,6 +302,7 @@
 
     window.addEventListener('pointerup', function () {
       pt.down = false;
+      grabSuppressed = false;
       if (aim.active) {
         aim.active = false;
         var v = launchVelocity();
@@ -308,6 +316,36 @@
     canvas.addEventListener('touchmove', function (e) {
       e.preventDefault();
     }, { passive: false });
+  }
+
+  /* Swiping him into a wall should be the easiest thing in the game, so
+     carrying him past the edge of the room counts as throwing him at it. Let
+     go on the spot and let the slam play out, rather than leaving the grab
+     stretching to a cursor that is now outside the box. */
+  var SLAM_MIN_SPEED = 2.5; // below this it is a drift, not a throw
+
+  function releaseGrab() {
+    if (!grabbedBuddy) return;
+    var c = mouseConstraint.constraint;
+    var body = mouseConstraint.body;
+    c.bodyB = mouseConstraint.body = null;
+    c.pointB = null;
+    grabbedBuddy = false;
+    grabSuppressed = true;
+    /* Shut the door in the same breath. The frame loop refreshes this mask
+       only after the engine has stepped, so leaving it until then gives
+       MouseConstraint one update in which to grab him straight back. */
+    mouseConstraint.collisionFilter.mask = 0;
+
+    var v = flingVelocity();
+    if (v.speed >= SLAM_MIN_SPEED) {
+      var launched = launchBuddy(v);
+      if (launched > 6) Bonk.Sound.whoosh();
+    } else {
+      /* A slow drift across the edge just sets him down. */
+      Bonk.Buddy.goRagdoll(0.3);
+    }
+    void body;
   }
 
   /* A stickman is a few thin lines, which is unfair to aim at on a trackpad.
@@ -722,7 +760,7 @@
       /* Pointer-driven forces run once per frame, not once per substep, so a
          fast flick cannot be applied three times over. */
       handleHover(dts);
-      mouseConstraint.collisionFilter.mask = st.tool === 'hand' ? 0xffffffff : 0;
+      mouseConstraint.collisionFilter.mask = st.tool === 'hand' && !grabSuppressed ? 0xffffffff : 0;
       /* Firm up the grab as the hand speeds up, so he tracks the cursor
          instead of lagging behind it and losing the swipe. Kept soft at rest
          for the rubbery feel. */
