@@ -1,0 +1,13 @@
+{
+  "name": "bonk-box",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A stickman doodle on a sketchbook page. A loving parody of Interactive Buddy (2005).",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/physics-check.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
