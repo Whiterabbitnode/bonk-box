@@ -315,10 +315,11 @@
       this._pd(p.chest, t.torso + lean, gain * 1.15);
       this._pd(p.pelvis, p.chest.angle + t.spine, gain);
       this._pd(p.head, p.chest.angle + t.neck, gain * 0.9);
-      this._pd(p.upperArmL, p.chest.angle + t.shoulderL, gain * 0.85);
-      this._pd(p.upperArmR, p.chest.angle + t.shoulderR, gain * 0.85);
-      this._pd(p.lowerArmL, p.upperArmL.angle + t.elbowL, gain * 0.7);
-      this._pd(p.lowerArmR, p.upperArmR.angle + t.elbowR, gain * 0.7);
+      /* Arms are light and do most of the acting, so they get the full gain. */
+      this._pd(p.upperArmL, p.chest.angle + t.shoulderL, gain);
+      this._pd(p.upperArmR, p.chest.angle + t.shoulderR, gain);
+      this._pd(p.lowerArmL, p.upperArmL.angle + t.elbowL, gain * 0.85);
+      this._pd(p.lowerArmR, p.upperArmR.angle + t.elbowR, gain * 0.85);
       this._pd(p.upperLegL, p.pelvis.angle + t.hipL, gain);
       this._pd(p.upperLegR, p.pelvis.angle + t.hipR, gain);
       this._pd(p.lowerLegL, p.upperLegL.angle + t.kneeL, gain);
@@ -752,7 +753,7 @@
       }
 
       /* Blend toward the target instead of assigning it. */
-      var rate = this.phase === 'getup' ? 0.32 : 0.12;
+      var rate = this.phase === 'getup' ? 0.32 : 0.2;
       this.pose = blendPose(this.pose, target, Math.min(1, rate * dt * 60));
 
       /* Breathing and a small weight shift, always on top. */
@@ -823,15 +824,18 @@
           return pose({ neck: Math.sin(t * 1.5) * 0.32, torso: Math.sin(t * 1.5) * 0.06 });
         }
         case 'dance': {
-          var b = st.time * 7.5;
+          /* Muscles lag a moving target in proportion to how fast it moves, so
+             a frantic beat reads as a twitch. Slow enough that the limbs
+             actually arrive at the pose. */
+          var b = st.time * 4.2;
           return pose({
-            shoulderL: 0.2 + Math.sin(b) * 1.9,
-            shoulderR: -0.2 + Math.sin(b + 3.14) * 1.9,
-            elbowL: -0.6 + Math.sin(b * 2) * 0.4,
-            elbowR: -0.6 + Math.sin(b * 2 + 1) * 0.4,
+            shoulderL: 0.3 + Math.sin(b) * 1.5,
+            shoulderR: -0.3 + Math.sin(b + 3.14) * 1.5,
+            elbowL: -0.5 + Math.sin(b * 2) * 0.3,
+            elbowR: -0.5 + Math.sin(b * 2 + 1) * 0.3,
             torso: Math.sin(b * 0.5) * 0.16,
-            hipL: 0.07 + Math.sin(b) * 0.2,
-            hipR: -0.07 - Math.sin(b) * 0.2,
+            hipL: 0.1 + Math.sin(b) * 0.22,
+            hipR: -0.1 - Math.sin(b) * 0.22,
             height: 0.97 + Math.abs(Math.sin(b)) * 0.05
           });
         }

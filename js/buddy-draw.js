@@ -422,7 +422,9 @@
       if (B.speech) {
         var fadeIn = Math.min(1, B.speech.t * 6);
         var fadeOut = Math.min(1, (B.speech.dur - B.speech.t) * 4);
-        var top = head.position.y - headR - 14;
+        /* Clear the hat, which stands well above the head outline. */
+        var hatLift = st.save.hat === 'wizard' ? headR * 2.1 : st.save.hat ? headR * 1.5 : 0;
+        var top = head.position.y - headR - 14 - hatLift;
         Bonk.Doodle.bubble(ctx, B.speech.line, head.position.x, top, {
           alpha: Math.min(fadeIn, fadeOut),
           color: B.speech.line === "you're absolutely right." ? P.marker : P.ink,
