@@ -306,7 +306,6 @@ own.
 <!-- Eddie: add the donate link here, and uncomment the matching line in
      .github/FUNDING.yml to light up the Sponsor button. -->
 
-## Star tracker
 ## Star History
 
 <a href="https://www.star-history.com/?type=date&repos=eddiesanjuan%2Fbonk-box">
@@ -316,4 +315,3 @@ own.
    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=eddiesanjuan/bonk-box&type=date&legend=top-left&sealed_token=9MbawrdyBSe_BPEi0ClhwgjBlOi7yNFCL-lteaaJWw2ySGcto6Dl7Q6K56xRd8U80TLY6g1RhyUyyDepaHSogl8MxdPEM6FP26GtmOknySYNoJSAQ1LVB3CpzNZppW-IG6i1fmtJzdj9_Q__GAOrCpXM2YzhGqlprybSrZw3zseeWIRBc-ILIlHd__Hz" />
  </picture>
 </a>
-[![Star History Chart](https://api.star-history.com/svg?repos=eddiesanjuan/bonk-box&type=Date)](https://star-history.com/#eddiesanjuan/bonk-box&Date)
