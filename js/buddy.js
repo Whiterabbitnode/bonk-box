@@ -209,7 +209,7 @@
           bodyB: b,
           pointB: { x: bx * s, y: by * s },
           length: 0,
-          stiffness: stiffness == null ? 0.85 : stiffness,
+          stiffness: stiffness == null ? 0.95 : stiffness,
           damping: 0.14,
           label: name
         });
@@ -223,8 +223,8 @@
          shows up as limbs that hang slightly off their sockets. */
       var halfChest = L.chest.h / 2;
       var halfPelvis = L.pelvis.h / 2;
-      join('neck', p.chest, 0, -halfChest, p.head, 0, L.head.r, 0.9);
-      join('spine', p.chest, 0, halfChest, p.pelvis, 0, -halfPelvis, 0.9);
+      join('neck', p.chest, 0, -halfChest, p.head, 0, L.head.r, 0.98);
+      join('spine', p.chest, 0, halfChest, p.pelvis, 0, -halfPelvis, 0.98);
       join('shoulderL', p.chest, -L.upperArm.cx, L.upperArm.cy - L.upperArm.h / 2 - L.chest.cy, p.upperArmL, 0, -L.upperArm.h / 2);
       join('shoulderR', p.chest, L.upperArm.cx, L.upperArm.cy - L.upperArm.h / 2 - L.chest.cy, p.upperArmR, 0, -L.upperArm.h / 2);
       join('elbowL', p.upperArmL, 0, L.upperArm.h / 2, p.lowerArmL, 0, -L.lowerArm.h / 2);

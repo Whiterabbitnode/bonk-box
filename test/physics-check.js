@@ -23,9 +23,10 @@ var H = 560;
 var FLOOR_Y = 500;
 
 var engine = Matter.Engine.create();
+/* Same solver budget the page uses, or this is not testing what ships. */
 engine.positionIterations = 14;
 engine.velocityIterations = 10;
-engine.constraintIterations = 6;
+engine.constraintIterations = 28;
 
 var walls = [
   Matter.Bodies.rectangle(W / 2, FLOOR_Y + 30, W, 60, { isStatic: true, friction: 0.8 }),

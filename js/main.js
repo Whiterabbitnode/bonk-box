@@ -76,7 +76,10 @@
        joints looking attached matters more than the microseconds. */
     engine.positionIterations = 14;
     engine.velocityIterations = 10;
-    engine.constraintIterations = 6;
+    /* 28 is high, but this is one small ragdoll and the frame budget is barely
+       touched. Dragging him across the room by an ankle stretches a four-link
+       chain, and fewer iterations leave a visible gap at the hip. */
+    engine.constraintIterations = 28;
     engine.gravity.y = 1;
 
     layout();
@@ -87,9 +90,12 @@
 
     mouse = M.Mouse.create(canvas);
     mouse.pixelRatio = dpr;
+    /* A soft, rubbery grab. Stiffer than this and hauling him across the room
+       by one forearm yanks that limb out of its socket faster than the solver
+       can pull it back, which reads as the arm coming off. */
     mouseConstraint = M.MouseConstraint.create(engine, {
       mouse: mouse,
-      constraint: { stiffness: 0.14, damping: 0.07, length: 0, angularStiffness: 0 }
+      constraint: { stiffness: 0.1, damping: 0.12, length: 0, angularStiffness: 0 }
     });
     M.Composite.add(engine.world, mouseConstraint);
 
@@ -119,6 +125,12 @@
       B.clampVelocities();
       B.applyMuscles(STEP / 1000);
       B.enforceJointLimits();
+    });
+    /* Again after integration: the mouse constraint can hand a light limb more
+       speed than the cap during a hard drag, and letting that reach the
+       collision pass or the renderer is what a limb explosion looks like. */
+    M.Events.on(engine, 'afterUpdate', function () {
+      Bonk.Buddy.clampVelocities();
     });
     M.Events.on(engine, 'collisionStart', onCollisionStart);
     M.Events.on(engine, 'collisionActive', onCollisionActive);
@@ -235,8 +247,14 @@
   function bounceOffTrampoline(body, prop) {
     if (trampolineCooldown > 0 && body.isBuddy) return;
     var vy = body.velocity.y;
-    var boost = Math.max(10, Math.abs(vy) * 1.22);
-    M.Body.setVelocity(body, { x: body.velocity.x * 0.94, y: -Math.min(boost, 22) });
+    var boost = Math.min(Math.max(10, Math.abs(vy) * 1.22), 22);
+    /* The whole figure has to leave the mat together. Kicking only the part
+       that touched it means the other ten bodies immediately drag it back
+       down, and the trampoline does nothing at all. */
+    var targets = body.isBuddy ? Bonk.Buddy.bodies : [body];
+    for (var i = 0; i < targets.length; i++) {
+      M.Body.setVelocity(targets[i], { x: targets[i].velocity.x * 0.94, y: -boost });
+    }
     prop.squish = 1;
     Bonk.Sound.boing(Bonk.clamp(boost / 20, 0.3, 1));
     if (body.isBuddy) {
