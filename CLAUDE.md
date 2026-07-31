@@ -10,7 +10,7 @@ These apply everywhere — identifiers, function names, comments, UI copy, commi
 messages, docs.
 
 **Use:** bonk, boop, plop, splash, drop, whoosh, flick, scuff, mend, tidy,
-erase, squash, boing.
+erase, squash, boing, popper, firework, burst, pop, fizzle, sling.
 
 **Never use:** kill, destroy, attack, weapon, shoot, bomb, explode, hurt, pain,
 punish, torture, or damage as a noun. Injury is always **"scuffs"**. The anvil
@@ -18,7 +18,12 @@ punish, torture, or damage as a noun. Injury is always **"scuffs"**. The anvil
 
 No firearms or weapons of any kind. Props are classic cartoon slapstick only:
 anvil, beach ball, water balloon, piano, feather, trampoline, fan, cookie,
-confetti, bowling ball.
+confetti, bowling ball, sticks, party popper, firework.
+
+The two celebration toys are **popper** and **firework** in every identifier and
+every line of copy. `BOOM` and `POP!` are allowed as hand-lettered burst text on
+screen, because that is comic lettering. They are not allowed as names for
+anything in the code.
 
 No gore, no blood, no injury realism. Scuffs are dizzy spiral eyes, orbiting
 stars, band-aid crosses, frazzled hair, squash-and-stretch — and all of it heals
@@ -62,6 +67,19 @@ Three of these were bugs that cost real time. Do not undo them.
    for more gain.
 6. **One impact fires a collision pair per limb it touches.** `Buddy.bonk` has a
    0.15s impact window so a single anvil does not scuff and pay five times over.
+7. **Restitution alone will not make a ragdoll bounce.** Eleven loosely jointed
+   bodies swallow an impact through the joints. `Buddy.bounce()` reflects the
+   whole figure off the surface together, which is what reads as cartoon.
+8. **Muscles cut out the same frame he goes limp.** The balance controller damps
+   about a third of his velocity per step, so any lingering muscle strength eats
+   a throw. Blending applies on the way back in only.
+9. **Walking is the balance controller aimed ahead of him**, not extra force.
+   Pushing against that controller gets you a twelve-pixels-a-second shuffle.
+10. **A plank is 70 long by 10 thick, so angle 0 is FLAT.** The fort's slot
+    angles are absolute body angles, not tilts from vertical.
+11. **The fort is judged against where it came to rest**, and against its
+    height, not against its ideal slots. Planks shift as they stack, and his
+    own settling otherwise reads as vandalism.
 
 ## Feel is the acceptance bar
 
@@ -85,6 +103,30 @@ change, and always `close` when done. Screenshots are evidence only if you read
 them. For anything about internal state, prefer `agent-browser eval` over
 inferring from a static frame — several apparent rendering bugs here turned out
 to be idle animations caught mid-motion.
+
+## Desktop app
+
+`desktop/` is a Tauri v2 wrapper. `desktop/build-frontend.sh` copies the root
+page into `desktop/dist/`; that folder is generated and gitignored, and the page
+at the repo root stays the single source of truth. Never hand-edit anything
+under `desktop/dist/`.
+
+The menu-bar icon must be a **template** image: transparent background, solid
+glyph (`desktop/src-tauri/icons/tray.png`). Handing it the app icon paints an
+opaque blob, because template mode uses only the alpha channel. `Image::from_bytes`
+needs tauri's `image-png` feature.
+
+Rebuild with `cd desktop && npm run build`. Builds on this machine are arm64.
+
+## Releasing
+
+1. `cd desktop && npm run build`
+2. `ditto -c -k --keepParent "src-tauri/target/release/bundle/macos/Bonk Box.app" "Bonk Box.app.zip"`
+   — `ditto` rather than `zip`, to keep the bundle intact
+3. `gh release create vX.Y.Z "Bonk Box.app.zip"`
+
+`install.sh` pulls the newest release asset, unpacks it to `/Applications`,
+clears the quarantine flag (the build is unsigned) and opens it.
 
 ## Design
 

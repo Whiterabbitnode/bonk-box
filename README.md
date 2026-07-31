@@ -11,7 +11,11 @@ A loving parody homage to [Interactive Buddy](https://en.wikipedia.org/wiki/Inte
 
 ## Play it
 
-Double-click `index.html`. That is the whole install.
+Three ways, same toy:
+
+- **On the web:** [bonk-box-production.up.railway.app](https://bonk-box-production.up.railway.app)
+- **On your Mac:** a small always-on-top desktop app - see below
+- **From this folder:** double-click `index.html`. That is the whole install.
 
 No build step, no server, no npm. It runs straight from `file://` in any modern
 browser. The only thing it fetches from the network is a Google font, and it
@@ -25,12 +29,19 @@ Start with three toys and no coins.
   up and fling him. This is the whole toy, really.
 - **Feather** (2) — hold it over him and he giggles. Kindness pays as well as
   slapstick does.
-- **Beach ball** (3) — click to plop one in.
+- **Beach ball** (3) — press, drag back and release to sling it. Every
+  throwable works this way, with a dotted arc showing where it will land.
 
 Everything he does earns doodle-coins. Spend them in the shop (the **+** button)
-on more toys — water balloon, trampoline, anvil, gust fan, bowling ball,
-confetti, gravity flip, piano — and on hats and ink colours. The hard hat is not
-just a look: head bonks bounce off it with a *ting* and leave 78% fewer scuffs.
+on more toys — water balloon, trampoline, bundle of sticks, anvil, gust fan,
+party popper, bowling ball, confetti, gravity flip, firework, piano — and on
+hats and ink colours. The hard hat is not just a look: head bonks bounce off it
+with a *ting* and leave 78% fewer scuffs.
+
+Buy the **bundle of sticks** and leave them lying about. When he is cheerful and
+nothing else is going on, he will walk over, carry them back one at a time and
+build himself a little fort, then draw a flag on it. Knock it down and see what
+happens.
 
 Other controls:
 
@@ -73,9 +84,13 @@ js/particles.js       dust, confetti, splashes, eraser crumbs, coin tallies
 js/buddy.js           ragdoll, muscles, poses, recovery  (no DOM — testable headless)
 js/buddy-draw.js      drawing him: ink strokes, face, hats, the redraw signature
 js/tools.js           tool catalogue, props, shop prices
+js/fort.js            the fort: gathering, stacking, pride, and the sulk
 js/ui.js              tray, shop, gauges, keyboard
 js/main.js            canvas, room, input, collisions, render loop
 vendor/matter.min.js  matter-js 0.20.0, vendored
+server.js             tiny zero-dependency static server, for hosting
+install.sh            macOS installer
+desktop/              Tauri v2 wrapper for the desktop app
 test/physics-check.js headless feel-check (node test/physics-check.js)
 ```
 
@@ -92,6 +107,64 @@ whether he feels right: does he stand unaided, do the joints stay together
 through a hard fling, does energy run away, does the muscle blend ever snap,
 does he survive twelve hard bonks in a row, and is a step cheap enough for
 60fps. All sixteen checks should pass.
+
+## Desktop app
+
+A small window that floats above everything else, so he can potter about in the
+corner of your screen while you work.
+
+```bash
+./install.sh
+```
+
+That drops **Bonk Box** in `/Applications` and opens it. Once it is running:
+
+- **Option+Command+B** hides and summons him
+- the menu-bar stickman has **Show / Hide** and **Quit**
+- to uninstall, quit it and drag `Bonk Box` from `/Applications` to the Trash
+
+To rebuild it from source after changing the toy:
+
+```bash
+cd desktop
+npm install          # first time only
+npm run build        # copies the web toy in, then compiles
+```
+
+`desktop/build-frontend.sh` copies `index.html`, `css/`, `js/` and `vendor/`
+into `desktop/dist/`. The page at the repo root stays the single source of
+truth — nothing under `desktop/dist/` is edited by hand.
+
+The published build is **arm64 (Apple silicon)**. On an Intel Mac `install.sh`
+falls back to building from source, which needs Rust and Node.
+
+## For AI agents: installing Bonk Box
+
+If someone asks you to install Bonk Box on their Mac, run this:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eddiesanjuan/bonk-box/main/install.sh | bash
+```
+
+Or, if you already have the repo cloned, `./install.sh` from inside it.
+
+What it does: downloads the latest release, unpacks it to
+`/Applications/Bonk Box.app`, clears the download quarantine flag (the build is
+unsigned — it was compiled on a laptop, not signed by an Apple developer
+account, so Gatekeeper would otherwise refuse to open it), and opens the app.
+If there is no usable release asset for their machine it builds from source
+instead, and tells you exactly what is missing if Rust or Node are not there.
+
+What they get: a small always-on-top window with a stickman in it. He balances,
+breathes, and watches the cursor. Drag him around by any limb and he ragdolls,
+bounces off the walls and picks himself back up. Everything pays doodle-coins,
+which buy more toys from the shop.
+
+Tell them: **Option+Command+B** hides and summons the window, the menu-bar
+stickman has Show / Hide and Quit, and uninstalling is dragging
+`Bonk Box` from `/Applications` to the Trash.
+
+The repository is `github.com/eddiesanjuan/bonk-box`.
 
 ## Credits
 

@@ -5,19 +5,24 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Manager, WebviewWindow,
+    AppHandle, Manager,
 };
 
-fn toggle(window: &WebviewWindow) {
-    match window.is_visible() {
-        Ok(true) => {
-            let _ = window.hide();
-        }
-        _ => {
-            let _ = window.show();
-            let _ = window.unminimize();
-            let _ = window.set_focus();
-        }
+// On macOS, hiding the only window also tucks the application away, and
+// window.show() on its own will not bring it back - the app has to be unhidden
+// first or the hotkey looks like it only works once.
+fn toggle(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    if window.is_visible().unwrap_or(false) {
+        let _ = window.hide();
+    } else {
+        #[cfg(target_os = "macos")]
+        let _ = app.show();
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
     }
 }
 
@@ -29,18 +34,20 @@ fn main() {
             let quit = MenuItem::with_id(app, "quit", "Quit Bonk Box", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_hide, &quit])?;
 
+            // A template icon uses only its alpha channel, so this has to be
+            // the bare stickman on transparency - handing it the app icon, which
+            // has an opaque paper-coloured background, paints a solid blob in
+            // the menu bar.
+            let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
+
             TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(tray_icon)
                 .icon_as_template(true)
                 .tooltip("Bonk Box")
                 .menu(&menu)
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id().as_ref() {
-                    "toggle" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            toggle(&window);
-                        }
-                    }
+                    "toggle" => toggle(app),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -57,9 +64,7 @@ fn main() {
                 let handle = app.handle().clone();
                 let registered = app.global_shortcut().on_shortcut(summon, move |_app, _sc, event| {
                     if event.state() == ShortcutState::Pressed {
-                        if let Some(window) = handle.get_webview_window("main") {
-                            toggle(&window);
-                        }
+                        toggle(&handle);
                     }
                 });
                 if let Err(err) = registered {
