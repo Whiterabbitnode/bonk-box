@@ -402,10 +402,80 @@
     },
 
     /* ---- reactions ---------------------------------------------------- */
+    /* Bounce is the signature of the original toy, but a buddy who is bouncy
+       while standing buzzes on the floor. So he only turns springy once the
+       muscles let go, and goes back to grippy when he stands up. */
+    setSpringy: function (on) {
+      if (this._springy === on) return;
+      this._springy = on;
+      for (var i = 0; i < this.bodies.length; i++) {
+        var b = this.bodies[i];
+        b.restitution = on ? 0.62 : 0.2;
+        b.friction = on ? 0.24 : 0.55;
+        /* Less air drag while tumbling so a hard fling keeps its energy for
+           several rebounds instead of dying against the first wall. */
+        b.frictionAir = on ? 0.011 : 0.021;
+      }
+    },
+
     goRagdoll: function (seconds) {
       this.phase = 'ragdoll';
       this.ragdollTimer = Math.max(this.ragdollTimer, seconds || 0.35);
       this.settleTimer = 0;
+      /* Off means off, this frame. The balance controller damps velocity by
+         about a third per step, so even three frames of lingering muscle turns
+         a hard throw into a shove. Blending is for coming back. */
+      this.strength = 0;
+      this.setSpringy(true);
+    },
+
+    /* A rebound. Restitution alone will not do this: eleven loosely jointed
+       bodies swallow an impact through the joints and he lands like a beanbag.
+       So the whole figure is reflected together off the surface, which is what
+       makes a hard fling read as a pinball with limbs. */
+    bounce: function (speedAt, point, normal) {
+      var M = window.Matter;
+      var now = Bonk.state.time;
+      if (now - (this._lastBounceAt || -9) < 0.07) return;
+      this._lastBounceAt = now;
+
+      var chest = this.parts.chest;
+      var power = Bonk.clamp(speedAt / 20, 0, 1);
+      this.squash = Math.min(1, this.squash + power * 0.75);
+
+      /* Away from whatever he hit. Derived from the contact point rather than
+         the pair normal, which flips depending on collision body order. */
+      var ax = chest.position.x - (point ? point.x : chest.position.x);
+      var ay = chest.position.y - (point ? point.y : chest.position.y);
+      var len = Math.hypot(ax, ay);
+      if (len < 0.001) return;
+      ax /= len;
+      ay /= len;
+
+      /* Gate on how fast the CHEST is closing on the surface, not on the speed
+         of whichever limb happened to touch first - a trailing foot brushing
+         the floor would otherwise cancel a bounce the rest of him has earned. */
+      var vn = chest.velocity.x * ax + chest.velocity.y * ay;
+      if (vn > -2.5) return; // not really moving into the surface
+      var add = Bonk.clamp(-(1 + 0.52) * vn, 0, 20);
+      power = Bonk.clamp(-vn / 16, 0, 1);
+
+      /* Glancing speed becomes tumble. This coefficient is most of what makes
+         a rebound read as cartoon rather than as a dropped sack. */
+      var tangential = chest.velocity.x * -ay + chest.velocity.y * ax;
+      var spin = Bonk.clamp(tangential * 0.042, -0.3, 0.3);
+
+      for (var i = 0; i < this.bodies.length; i++) {
+        var b = this.bodies[i];
+        M.Body.setVelocity(b, { x: b.velocity.x + ax * add, y: b.velocity.y + ay * add });
+        M.Body.setAngularVelocity(b, Bonk.clamp(b.angularVelocity + spin * Bonk.rand(0.6, 1.3), -0.7, 0.7));
+      }
+
+      if (point && Bonk.Particles && power > 0.2) {
+        Bonk.Particles.star(point.x, point.y, 1 + Math.round(power * 2));
+        if (power > 0.5) Bonk.Particles.dust(point.x, point.y, 2, 0.6);
+      }
+      if (Bonk.Sound && power > 0.12) Bonk.Sound.boing(power);
     },
 
     smudgeLimbs: function (count) {
@@ -646,8 +716,12 @@
       }
 
       if (this.phase === 'ragdoll') {
-        /* Muscles release quickly - that part should feel like a switch. */
-        this.strength = Math.max(0, this.strength - dt / 0.16);
+        /* Muscles release almost instantly. The balance controller damps
+           velocity hard by design, so every frame it stays on after a throw
+           eats the throw - at 0.16s it was turning a 22px/step fling into 7
+           before he had crossed half the room. Blending matters on the way
+           back IN, not on the way out. */
+        this.strength = Math.max(0, this.strength - dt / 0.05);
         this.ragdollTimer -= dt;
         if (this.ragdollTimer > 0) return;
         if (this.speed() < C.calmSpeed) {
@@ -699,6 +773,7 @@
 
     beginGetup: function () {
       this.phase = 'getup';
+      this.setSpringy(false);
       this.getupT = 0;
       this._dusted = false;
       this.getupKind = Bonk.state.scuffs < 0.35 ? 'kip' : 'climb';
@@ -913,6 +988,7 @@
       }
       this.phase = 'stand';
       this.strength = 1;
+      this.setSpringy(false);
       this.stars.length = 0;
       this.decals.length = 0;
       this.dizzy = 0;

@@ -56,10 +56,10 @@
     if (walls.length) M.Composite.remove(engine.world, walls);
     var t = 200;
     walls = [
-      M.Bodies.rectangle((room.left + room.right) / 2, room.bottom + t / 2, room.right - room.left + t * 2, t, { isStatic: true, friction: 0.85, restitution: 0.2, label: 'floor' }),
-      M.Bodies.rectangle((room.left + room.right) / 2, room.top - t / 2, room.right - room.left + t * 2, t, { isStatic: true, friction: 0.5, restitution: 0.4, label: 'ceiling' }),
-      M.Bodies.rectangle(room.left - t / 2, (room.top + room.bottom) / 2, t, room.bottom - room.top + t * 2, { isStatic: true, friction: 0.4, restitution: 0.55, label: 'wall' }),
-      M.Bodies.rectangle(room.right + t / 2, (room.top + room.bottom) / 2, t, room.bottom - room.top + t * 2, { isStatic: true, friction: 0.4, restitution: 0.55, label: 'wall' })
+      M.Bodies.rectangle((room.left + room.right) / 2, room.bottom + t / 2, room.right - room.left + t * 2, t, { isStatic: true, friction: 0.7, restitution: 0.52, label: 'floor' }),
+      M.Bodies.rectangle((room.left + room.right) / 2, room.top - t / 2, room.right - room.left + t * 2, t, { isStatic: true, friction: 0.4, restitution: 0.6, label: 'ceiling' }),
+      M.Bodies.rectangle(room.left - t / 2, (room.top + room.bottom) / 2, t, room.bottom - room.top + t * 2, { isStatic: true, friction: 0.3, restitution: 0.74, label: 'wall' }),
+      M.Bodies.rectangle(room.right + t / 2, (room.top + room.bottom) / 2, t, room.bottom - room.top + t * 2, { isStatic: true, friction: 0.3, restitution: 0.74, label: 'wall' })
     ];
     M.Composite.add(engine.world, walls);
   }
@@ -288,6 +288,7 @@
         if (other.isProp && other.prop && !other.prop.erasing) {
           var def = other.prop.def;
           other.prop.squish = 1;
+          if (B.phase === 'ragdoll') B.bounce(speed, point, pair.collision && pair.collision.normal);
           if (def.onHit) def.onHit(other.prop, speed, point, part.partName);
           if (def.scuffMul !== 0) {
             B.bonk(part.partName, speed, point, { payMul: def.payMul, scuffMul: def.scuffMul });
@@ -298,6 +299,8 @@
 
         if (other.isStatic) {
           var floorSpeed = Math.hypot(part.velocity.x, part.velocity.y);
+          /* Every rebound off the room gets its tumble and its star. */
+          if (B.phase === 'ragdoll') B.bounce(floorSpeed, point, pair.collision && pair.collision.normal);
           B.bonk(part.partName, floorSpeed, point, { payMul: 0.7, scuffMul: 0.75 });
           if (floorSpeed > Bonk.CONFIG.bigBonkSpeed) {
             shakeScreen(Bonk.clamp(floorSpeed / 26, 0.2, 0.8));
