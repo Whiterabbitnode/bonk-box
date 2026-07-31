@@ -563,6 +563,26 @@ body {
   margin: 10px 0 -2px;
 }
 
+/* While he is asking you something, the page furniture gets out of the way -
+   the sign is the only thing that matters for those few seconds. */
+body.reacting .hud-tr,
+body.reacting .hud-tl {
+  opacity: 0.12;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+body.reacting .hud-bottom {
+  opacity: 0.35;
+  transition: opacity 0.25s ease;
+}
+
+.hud-tr,
+.hud-tl,
+.hud-bottom {
+  transition: opacity 0.35s ease;
+}
+
 /* ---- focus ------------------------------------------------------------- */
 :focus-visible {
   outline: 3px dashed var(--marker);

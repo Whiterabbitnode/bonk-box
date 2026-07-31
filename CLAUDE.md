@@ -77,7 +77,15 @@ Three of these were bugs that cost real time. Do not undo them.
    Pushing against that controller gets you a twelve-pixels-a-second shuffle.
 10. **A plank is 70 long by 10 thick, so angle 0 is FLAT.** The fort's slot
     angles are absolute body angles, not tilts from vertical.
-11. **The fort is judged against where it came to rest**, and against its
+11. **Never ask the window which monitor it is on.** `current_monitor()`
+    returns None once the window sits outside every screen, so any position
+    derived from it fails exactly when it is needed to bring the window back.
+    Work from `primary_monitor()`. A peek that parks off screen and then cannot
+    compute its way home kills the whole hooks feature in total silence.
+12. **A flag set before a fallible step must come back down on every path.**
+    The sliding flag leaked through an early return and wedged every future
+    peek into a no-op. It is an RAII guard now.
+13. **The fort is judged against where it came to rest**, and against its
     height, not against its ideal slots. Planks shift as they stack, and his
     own settling otherwise reads as vandalism.
 
@@ -95,14 +103,6 @@ node test/physics-check.js   # all 16 checks
 
 Then look at it in a browser. The headless check catches broken; it cannot
 tell you whether something is delightful.
-
-## Known, parked
-
-- **The heated sign collides with the chrome.** At the default desktop window
-  size the placard text runs underneath the "he shipped a bug" button in the
-  top right. Either the sign wraps to the available width, or the chrome fades
-  back while a reaction is playing. Cosmetic, not a blocker; verified on the
-  live app 2026-07-31.
 
 ## Verification
 

@@ -60,6 +60,7 @@
     offer: function () {
       var B = Bonk.Buddy;
       this.ask = { t: 0 };
+      document.body.classList.add('reacting');
       B.speech = null;
       B.idle = { name: 'lookaround', t: 0, dur: 6 };
       Bonk.Sound.pop(0.8);
@@ -67,6 +68,7 @@
 
     accept: function () {
       this.ask = null;
+      document.body.classList.remove('reacting');
       var B = Bonk.Buddy;
       Bonk.state.tool = 'hand';
       if (Bonk.UI) Bonk.UI.selectTool('hand');
@@ -77,6 +79,7 @@
 
     decline: function () {
       this.ask = null;
+      document.body.classList.remove('reacting');
       var B = Bonk.Buddy;
       B.say(Bonk.pick(['respect.', 'good. breathe.', 'proud of you.']), 3);
       B.idle = { name: 'wave', t: 0, dur: 2.2 };
@@ -88,7 +91,10 @@
     update: function (dt) {
       if (this.ask) {
         this.ask.t += dt;
-        if (this.ask.t > 20) this.ask = null; // he does not nag
+        if (this.ask.t > 20) {
+          this.ask = null; // he does not nag
+          document.body.classList.remove('reacting');
+        }
       }
     },
 
@@ -174,6 +180,7 @@
       });
       T.event.listen('bonk-retreat', function () {
         self.ask = null;
+        document.body.classList.remove('reacting');
       });
       /* Any click into the window counts as engaging with him. */
       window.addEventListener('pointerdown', function () {

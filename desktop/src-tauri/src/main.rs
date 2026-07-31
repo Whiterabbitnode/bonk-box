@@ -22,6 +22,18 @@ use tauri::{
 const DEFAULT_PORT: u16 = 48222;
 const PEEK_SECONDS: u64 = 8;
 
+/// Puts the sliding flag back down on every exit path, including early
+/// returns and panics.
+struct SlideGuard(AppHandle);
+impl Drop for SlideGuard {
+    fn drop(&mut self) {
+        self.0
+            .state::<PeekState>()
+            .sliding
+            .store(false, Ordering::SeqCst);
+    }
+}
+
 struct PeekState {
     sliding: AtomicBool,
     engaged: AtomicBool,
@@ -38,19 +50,64 @@ struct Perch {
     hidden: PhysicalPosition<i32>,
 }
 
+/// NEVER ask the window which monitor it is on. `current_monitor()` returns
+/// None once the window sits outside every screen - which is exactly where the
+/// retreat parks it - so a perch derived from it fails precisely when it is
+/// needed to bring him back. Always work from the primary screen instead.
+fn primary(app: &AppHandle) -> Option<tauri::Monitor> {
+    if let Ok(Some(m)) = app.primary_monitor() {
+        return Some(m);
+    }
+    app.available_monitors().ok()?.into_iter().next()
+}
+
 fn perch_for(app: &AppHandle) -> Option<Perch> {
     let window = app.get_webview_window("main")?;
-    let monitor = window.current_monitor().ok().flatten()?;
+    let monitor = primary(app)?;
     let screen = monitor.size();
+    let origin = monitor.position();
     let scale = monitor.scale_factor();
     let size = window.outer_size().ok()?;
     let margin = (24.0 * scale) as i32;
-    let x = screen.width as i32 - size.width as i32 - margin;
-    let y = ((screen.height as i32 - size.height as i32) / 2).max(margin);
+    let x = origin.x + screen.width as i32 - size.width as i32 - margin;
+    let y = (origin.y + (screen.height as i32 - size.height as i32) / 2).max(origin.y + margin);
     Some(Perch {
         shown: PhysicalPosition::new(x, y),
-        hidden: PhysicalPosition::new(screen.width as i32 + margin, y),
+        hidden: PhysicalPosition::new(origin.x + screen.width as i32 + margin, y),
     })
+}
+
+/// A clamp, not a heuristic: if the window's frame touches no screen at all,
+/// put it back in the middle of the primary one. Called before every show and
+/// every peek, and once at launch, because a window nobody can see makes the
+/// whole feature fail silently - the worst way for it to fail.
+fn ensure_on_screen(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else { return };
+    let Ok(pos) = window.outer_position() else { return };
+    let Ok(size) = window.outer_size() else { return };
+    let (w, h) = (size.width as i32, size.height as i32);
+
+    let monitors = app.available_monitors().unwrap_or_default();
+    let visible = monitors.iter().any(|m| {
+        let o = m.position();
+        let s = m.size();
+        // Any overlap at all counts as reachable.
+        pos.x < o.x + s.width as i32
+            && pos.x + w > o.x
+            && pos.y < o.y + s.height as i32
+            && pos.y + h > o.y
+    });
+    if visible {
+        return;
+    }
+
+    if let Some(m) = primary(app) {
+        let o = m.position();
+        let s = m.size();
+        let x = o.x + (s.width as i32 - w) / 2;
+        let y = o.y + (s.height as i32 - h) / 2;
+        let _ = window.set_position(PhysicalPosition::new(x.max(o.x), y.max(o.y)));
+    }
 }
 
 fn config_path() -> Option<std::path::PathBuf> {
@@ -143,14 +200,16 @@ fn peek(app: &AppHandle, kind: &str) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
-    let Some(perch) = perch_for(app) else { return };
 
     // If the app was properly hidden, bring the window back WITHOUT activating
     // it: no app.show(), no set_focus. Ordering it front is enough to be seen.
     if !window.is_visible().unwrap_or(false) {
-        let _ = window.set_position(perch.hidden);
+        if let Some(perch) = perch_for(app) {
+            let _ = window.set_position(perch.hidden);
+        }
         let _ = window.show();
     }
+    ensure_on_screen(app);
 
     let (_, auto_focus) = read_config();
     if auto_focus {
@@ -170,13 +229,25 @@ fn peek(app: &AppHandle, kind: &str) {
 
     let app = app.clone();
     std::thread::spawn(move || {
+        // Whatever happens below, the flag comes back down. Leaking it once
+        // wedges every future peek into an early return, which is how the
+        // feature died silently in the first place.
+        let _guard = SlideGuard(app.clone());
+
         let Some(window) = app.get_webview_window("main") else { return };
         let Some(perch) = perch_for(&app) else { return };
 
+        // Slide from wherever he actually is, not from a hard-coded off-screen
+        // point - otherwise an event while he is already on screen yanks him
+        // out of sight before bringing him back.
+        let from = window
+            .outer_position()
+            .map(|p| p.x)
+            .unwrap_or(perch.hidden.x);
         for step in 0..=14 {
             let t = step as f64 / 14.0;
             let eased = 1.0 - (1.0 - t) * (1.0 - t);
-            let x = perch.hidden.x as f64 + (perch.shown.x - perch.hidden.x) as f64 * eased;
+            let x = from as f64 + (perch.shown.x - from) as f64 * eased;
             let _ = window.set_position(PhysicalPosition::new(x as i32, perch.shown.y));
             std::thread::sleep(Duration::from_millis(12));
         }
@@ -185,7 +256,6 @@ fn peek(app: &AppHandle, kind: &str) {
             std::thread::sleep(Duration::from_millis(250));
             let state = app.state::<PeekState>();
             if state.engaged.load(Ordering::SeqCst) {
-                state.sliding.store(false, Ordering::SeqCst);
                 return; // clicked into: he stays until you send him away
             }
             let idle = state
@@ -206,9 +276,6 @@ fn peek(app: &AppHandle, kind: &str) {
             std::thread::sleep(Duration::from_millis(12));
         }
         let _ = app.emit("bonk-retreat", ());
-        app.state::<PeekState>()
-            .sliding
-            .store(false, Ordering::SeqCst);
     });
 }
 
@@ -228,6 +295,7 @@ fn toggle(app: &AppHandle) {
         if let Some(perch) = perch_for(app) {
             let _ = window.set_position(perch.shown);
         }
+        ensure_on_screen(app);
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
@@ -306,6 +374,9 @@ fn main() {
                     eprintln!("Bonk Box: Opt+Cmd+B is already spoken for, carrying on without it ({err})");
                 }
             }
+
+            // A saved position from a previous run can land off every screen.
+            ensure_on_screen(&app.handle().clone());
 
             let handle = app.handle().clone();
             std::thread::spawn(move || serve(handle, port));
