@@ -259,6 +259,9 @@ fn check_for_updates(app: AppHandle, forced: bool) {
         if !forced && !should_check_today() {
             return;
         }
+        // Give the page a moment to exist before talking to it, or the
+        // announcement lands in a webview that has not loaded yet.
+        std::thread::sleep(Duration::from_millis(2500));
         let Some((tag, url)) = fetch_latest() else { return };
         let running = env!("CARGO_PKG_VERSION");
         if !is_newer(&tag, running) {
@@ -683,6 +686,12 @@ fn main() {
 
             let handle = app.handle().clone();
             std::thread::spawn(move || serve(handle, port));
+
+            // Launching the app IS you opening him, so the watchdog must not
+            // treat the startup window as an uninvited peek and hide it.
+            app.state::<PeekState>()
+                .user_opened
+                .store(true, Ordering::SeqCst);
 
             check_for_updates(app.handle().clone(), false);
             watch_visibility(app.handle().clone());
