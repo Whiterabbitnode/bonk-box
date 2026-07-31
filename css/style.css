@@ -1,0 +1,543 @@
+/* Bonk Box - the page furniture. The world itself is drawn on the canvas;
+   everything here is the chrome laid over the sketchbook page. */
+
+:root {
+  --paper: #faf7f2;
+  --grid: #d9e4ee;
+  --ink: #2b2b33;
+  --marker: #e0533d;
+  --highlighter: #ffd84d;
+  --pencil: #8a8f98;
+
+  --hand: 'Shantell Sans', 'Patrick Hand', 'Bradley Hand', 'Segoe Print', cursive;
+  --sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+#stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+#page {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hud {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  gap: 10px;
+}
+
+.hud-tl {
+  top: 16px;
+  left: 18px;
+  flex-direction: column;
+}
+
+.hud-tr {
+  top: 16px;
+  right: 18px;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.hud-bottom {
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  align-items: flex-end;
+}
+
+/* ---- name tag + gauges ------------------------------------------------ */
+.nametag {
+  background: rgba(250, 247, 242, 0.86);
+  border: 2px solid var(--ink);
+  border-radius: 12px 14px 11px 13px;
+  padding: 7px 12px 9px;
+  transform: rotate(-1.1deg);
+  box-shadow: 2px 3px 0 rgba(43, 43, 51, 0.1);
+}
+
+#nameInput {
+  font-family: var(--hand);
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px dashed transparent;
+  padding: 0 2px 1px;
+  width: 168px;
+  cursor: text;
+}
+
+#nameInput:hover {
+  border-bottom-color: var(--pencil);
+}
+
+#nameInput:focus {
+  outline: none;
+  border-bottom-color: var(--marker);
+}
+
+.gauges {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.gauge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--hand);
+  font-size: 12px;
+  color: var(--pencil);
+}
+
+.gauge-label {
+  width: 40px;
+  text-align: right;
+}
+
+.gauge-read {
+  font-size: 11px;
+  color: var(--pencil);
+  min-width: 52px;
+}
+
+.meter {
+  width: 64px;
+  height: 12px;
+  overflow: visible;
+}
+
+.meter-frame {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.1;
+  stroke-linejoin: round;
+}
+
+.meter-fill {
+  transition: width 0.35s ease;
+}
+
+.meter-fill-mood {
+  fill: var(--highlighter);
+}
+
+.meter-fill-scuff {
+  fill: var(--marker);
+  opacity: 0.75;
+}
+
+/* ---- coins + chrome buttons ------------------------------------------- */
+.coins {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--hand);
+  font-size: 27px;
+  font-weight: 700;
+  color: var(--ink);
+  background: rgba(250, 247, 242, 0.86);
+  border: 2px solid var(--ink);
+  border-radius: 13px 11px 14px 12px;
+  padding: 3px 15px 5px 11px;
+  transform: rotate(1deg);
+  box-shadow: 2px 3px 0 rgba(43, 43, 51, 0.1);
+  transition: transform 0.16s ease;
+}
+
+.coins.pop {
+  transform: rotate(1deg) scale(1.11);
+}
+
+.coin-icon {
+  width: 25px;
+  height: 25px;
+  fill: var(--highlighter);
+  stroke: var(--ink);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
+.coin-icon path {
+  fill: none;
+}
+
+.chrome {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 192px;
+}
+
+.btn {
+  font-family: var(--hand);
+  font-size: 14px;
+  color: var(--ink);
+  background: rgba(250, 247, 242, 0.9);
+  border: 2px solid var(--ink);
+  border-radius: 10px 12px 9px 11px;
+  padding: 4px 11px 5px;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.btn:hover {
+  background: #fff;
+  transform: translateY(-1px) rotate(-0.6deg);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-marker {
+  color: var(--marker);
+  border-color: var(--marker);
+  font-weight: 700;
+}
+
+.btn-marker:hover {
+  background: #fff2ef;
+}
+
+/* ---- tool tray --------------------------------------------------------- */
+.tray {
+  display: flex;
+  gap: 7px;
+  padding: 9px 11px;
+  background: rgba(250, 247, 242, 0.88);
+  border: 2px solid var(--ink);
+  border-radius: 16px 14px 17px 15px;
+  box-shadow: 2px 4px 0 rgba(43, 43, 51, 0.1);
+}
+
+.tool {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 2px dashed transparent;
+  border-radius: 12px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform 0.13s ease, background 0.13s ease;
+}
+
+.tool svg {
+  width: 27px;
+  height: 27px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.tool:hover {
+  background: rgba(217, 228, 238, 0.5);
+  transform: translateY(-3px) rotate(-2deg);
+}
+
+.tool[aria-pressed='true'] {
+  border-color: var(--marker);
+  color: var(--marker);
+  background: rgba(224, 83, 61, 0.09);
+}
+
+.tool .key {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-family: var(--hand);
+  font-size: 11px;
+  color: var(--pencil);
+  pointer-events: none;
+}
+
+.tool .label {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--hand);
+  font-size: 13px;
+  white-space: nowrap;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 2px 8px 3px;
+  border-radius: 7px;
+  opacity: 0;
+  transition: opacity 0.13s ease;
+  pointer-events: none;
+}
+
+.tool:hover .label,
+.tool:focus-visible .label {
+  opacity: 1;
+}
+
+.tray-add {
+  width: 50px;
+  height: 50px;
+  margin-left: 9px;
+  font-family: var(--hand);
+  font-size: 30px;
+  line-height: 1;
+  color: var(--ink);
+  background: rgba(250, 247, 242, 0.88);
+  border: 2px solid var(--ink);
+  border-radius: 15px 13px 16px 14px;
+  cursor: pointer;
+  box-shadow: 2px 4px 0 rgba(43, 43, 51, 0.1);
+  transition: transform 0.13s ease, background 0.13s ease;
+}
+
+.tray-add:hover {
+  background: #fff;
+  transform: translateY(-3px) rotate(3deg);
+}
+
+.tray-add.nudge {
+  border-color: var(--marker);
+  color: var(--marker);
+}
+
+/* ---- footer ------------------------------------------------------------ */
+.footer {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  margin: 0;
+  font-family: var(--hand);
+  font-size: 12px;
+  color: var(--pencil);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ---- shop -------------------------------------------------------------- */
+.shop {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(250, 247, 242, 0.82);
+  backdrop-filter: blur(1.5px);
+}
+
+.shop[hidden] {
+  display: none;
+}
+
+.shop-sheet {
+  width: min(880px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  border-radius: 18px 16px 19px 17px;
+  padding: 20px 22px 26px;
+  box-shadow: 5px 7px 0 rgba(43, 43, 51, 0.13);
+}
+
+.shop-head {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.shop-head h2 {
+  font-family: var(--hand);
+  font-size: 34px;
+  margin: 0;
+  color: var(--ink);
+}
+
+.shop-sub {
+  font-family: var(--hand);
+  font-size: 15px;
+  color: var(--pencil);
+  margin: 2px 0 0;
+}
+
+.btn-close {
+  position: absolute;
+  top: 2px;
+  right: 0;
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(202px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 14px 14px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 2px solid var(--ink);
+  border-radius: 13px 15px 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink);
+  transition: transform 0.14s ease, background 0.14s ease;
+}
+
+.card:nth-child(3n) {
+  transform: rotate(-0.7deg);
+}
+
+.card:nth-child(3n + 2) {
+  transform: rotate(0.6deg);
+}
+
+.card:hover:not(:disabled) {
+  background: #fff;
+  transform: translateY(-3px) rotate(0deg);
+}
+
+.card:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card svg {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card-name {
+  font-family: var(--hand);
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.card-blurb {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #5d626b;
+}
+
+.card-price {
+  font-family: var(--hand);
+  font-size: 17px;
+  color: var(--marker);
+}
+
+.card.owned .card-price {
+  color: var(--pencil);
+}
+
+.card.equipped {
+  border-color: var(--marker);
+  background: rgba(224, 83, 61, 0.07);
+}
+
+.shop-section {
+  grid-column: 1 / -1;
+  font-family: var(--hand);
+  font-size: 21px;
+  color: var(--pencil);
+  margin: 10px 0 -2px;
+}
+
+/* ---- focus ------------------------------------------------------------- */
+:focus-visible {
+  outline: 3px dashed var(--marker);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .footer {
+    font-size: 10px;
+  }
+
+  .chrome {
+    max-width: 190px;
+  }
+
+  .tool {
+    width: 44px;
+    height: 44px;
+  }
+
+  .hud-bottom {
+    bottom: 26px;
+  }
+}

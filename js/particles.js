@@ -280,7 +280,20 @@
             D.text(ctx, '+' + p.amount, p.x, p.y, { size: 17 + Math.min(8, p.amount * 0.35), color: P.ink, alpha: fade * 0.45 });
             break;
           case 'dust':
-            D.circle(ctx, p.x, p.y, p.r, { color: P.pencil, width: 1.6, alpha: fade * 0.5, seed: p.seed, amp: 1.6 });
+            /* A three-bump poof cloud. A single wobbly ring at this size reads
+               as a ball of scribble rather than dust. */
+            ctx.save();
+            ctx.globalAlpha = fade * 0.45;
+            ctx.strokeStyle = P.pencil;
+            ctx.lineWidth = 1.7;
+            ctx.beginPath();
+            for (var k = 0; k < 3; k++) {
+              var a = p.seed + k * 2.1;
+              ctx.moveTo(p.x + Math.cos(a) * p.r * 0.38 + p.r * 0.52, p.y + Math.sin(a) * p.r * 0.28);
+              ctx.arc(p.x + Math.cos(a) * p.r * 0.38, p.y + Math.sin(a) * p.r * 0.28, p.r * 0.52, 0, 6.29);
+            }
+            ctx.stroke();
+            ctx.restore();
             break;
           case 'confetti':
             if (p.shape === 'star') {

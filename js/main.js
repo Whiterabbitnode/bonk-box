@@ -1,0 +1,556 @@
+/* Bonk Box - the page comes alive here: canvas, room, input, collisions and
+   the render loop. Physics runs on a fixed 60Hz step regardless of display
+   refresh, because the muscle gains are tuned per step. */
+(function () {
+  'use strict';
+  var Bonk = (window.Bonk = window.Bonk || {});
+  var M = window.Matter;
+  var P = Bonk.PALETTE;
+  var D;
+
+  var canvas, ctx, dpr = 1;
+  var W = 0;
+  var H = 0;
+  var engine, mouse, mouseConstraint;
+  var walls = [];
+  var roomStrokes = null;
+  var shake = { x: 0, y: 0, amount: 0 };
+  var pageFlip = 0;
+  var acc = 0;
+  var last = 0;
+  var gravityFlip = 0;
+  var trampolineCooldown = 0;
+  var grabbedBuddy = false;
+  var STEP = 1000 / 60;
+
+  var room = (Bonk.room = { left: 0, right: 0, top: 0, bottom: 0 });
+
+  /* ---- setup ----------------------------------------------------------- */
+  function layout() {
+    var rect = canvas.getBoundingClientRect();
+    W = Math.max(320, Math.round(rect.width));
+    H = Math.max(360, Math.round(rect.height));
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    /* Insets clear the name tag above and the tool tray below. */
+    room.left = Math.round(Math.min(90, W * 0.07));
+    room.right = W - room.left;
+    room.top = Math.round(Math.min(130, H * 0.22));
+    room.bottom = Math.round(H - Math.min(150, H * 0.26));
+
+    /* Size him to the room, once, before he is built. A short window gets a
+       smaller buddy rather than a cramped one. */
+    if (!Bonk.Buddy.parts) {
+      Bonk.CONFIG.buddyHeight = Math.round(Bonk.clamp((room.bottom - room.top) * 0.56, 120, 200));
+    }
+
+    buildWalls();
+    roomStrokes = null;
+    if (mouse) mouse.pixelRatio = dpr;
+  }
+
+  function buildWalls() {
+    if (walls.length) M.Composite.remove(engine.world, walls);
+    var t = 200;
+    walls = [
+      M.Bodies.rectangle((room.left + room.right) / 2, room.bottom + t / 2, room.right - room.left + t * 2, t, { isStatic: true, friction: 0.85, restitution: 0.2, label: 'floor' }),
+      M.Bodies.rectangle((room.left + room.right) / 2, room.top - t / 2, room.right - room.left + t * 2, t, { isStatic: true, friction: 0.5, restitution: 0.4, label: 'ceiling' }),
+      M.Bodies.rectangle(room.left - t / 2, (room.top + room.bottom) / 2, t, room.bottom - room.top + t * 2, { isStatic: true, friction: 0.4, restitution: 0.55, label: 'wall' }),
+      M.Bodies.rectangle(room.right + t / 2, (room.top + room.bottom) / 2, t, room.bottom - room.top + t * 2, { isStatic: true, friction: 0.4, restitution: 0.55, label: 'wall' })
+    ];
+    M.Composite.add(engine.world, walls);
+  }
+
+  function init() {
+    canvas = document.getElementById('page');
+    ctx = canvas.getContext('2d');
+    D = Bonk.Doodle;
+
+    Bonk.state.reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    engine = M.Engine.create();
+    /* Generous solver budget: this is one small ragdoll, not a crowd, and the
+       joints looking attached matters more than the microseconds. */
+    engine.positionIterations = 14;
+    engine.velocityIterations = 10;
+    engine.constraintIterations = 6;
+    engine.gravity.y = 1;
+
+    layout();
+    Bonk.Props.init(engine);
+    Bonk.Buddy.create(engine.world, (room.left + room.right) / 2, room.bottom);
+    Bonk.state.pointer.x = (room.left + room.right) / 2;
+    Bonk.state.pointer.y = room.bottom - 120;
+
+    mouse = M.Mouse.create(canvas);
+    mouse.pixelRatio = dpr;
+    mouseConstraint = M.MouseConstraint.create(engine, {
+      mouse: mouse,
+      constraint: { stiffness: 0.14, damping: 0.07, length: 0, angularStiffness: 0 }
+    });
+    M.Composite.add(engine.world, mouseConstraint);
+
+    /* Matter's mouse swallows wheel events by default; the page has nothing to
+       scroll, but leave the listener passive so it never blocks. */
+    canvas.removeEventListener('wheel', mouse.mousewheel);
+
+    M.Events.on(mouseConstraint, 'startdrag', function (e) {
+      if (e.body && e.body.isBuddy) {
+        grabbedBuddy = true;
+        Bonk.Buddy.say(Bonk.pick(['whoa', 'hey!', 'up we go', 'careful']), 1.2);
+      }
+      Bonk.Sound.start();
+    });
+    M.Events.on(mouseConstraint, 'enddrag', function (e) {
+      if (e.body && e.body.isBuddy) {
+        grabbedBuddy = false;
+        /* A small kick on release makes the fling arc read as a throw. */
+        M.Body.setVelocity(e.body, { x: e.body.velocity.x * 1.25, y: e.body.velocity.y * 1.25 });
+        Bonk.Buddy.goRagdoll(0.3);
+        Bonk.Sound.whoosh();
+      }
+    });
+
+    M.Events.on(engine, 'beforeUpdate', function () {
+      var B = Bonk.Buddy;
+      B.clampVelocities();
+      B.applyMuscles(STEP / 1000);
+      B.enforceJointLimits();
+    });
+    M.Events.on(engine, 'collisionStart', onCollisionStart);
+    M.Events.on(engine, 'collisionActive', onCollisionActive);
+
+    bindPointer();
+    Bonk.UI.init();
+    window.addEventListener('resize', layout);
+
+    if (Bonk.state.returning) {
+      window.setTimeout(function () {
+        Bonk.Buddy.say('oh, you’re back.', 2.4);
+        Bonk.Buddy.idle = { name: 'wave', t: 0, dur: 2.2 };
+      }, 900);
+    } else {
+      window.setTimeout(function () {
+        Bonk.Buddy.say('hi. drag me around?', 3);
+      }, 1100);
+    }
+    Bonk.state.save.visits++;
+    Bonk.persist();
+
+    last = performance.now();
+    requestAnimationFrame(frame);
+  }
+
+  /* ---- input ------------------------------------------------------------ */
+  function bindPointer() {
+    var pt = Bonk.state.pointer;
+
+    function toWorld(e) {
+      var r = canvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+
+    canvas.addEventListener('pointermove', function (e) {
+      var p = toWorld(e);
+      pt.vx = p.x - pt.x;
+      pt.vy = p.y - pt.y;
+      pt.x = p.x;
+      pt.y = p.y;
+      pt.inside = true;
+    });
+
+    canvas.addEventListener('pointerleave', function () {
+      pt.inside = false;
+      pt.down = false;
+    });
+
+    canvas.addEventListener('pointerdown', function (e) {
+      var p = toWorld(e);
+      pt.x = p.x;
+      pt.y = p.y;
+      pt.down = true;
+      pt.inside = true;
+      Bonk.Sound.start();
+      var tool = Bonk.state.tool;
+      if (tool !== 'hand' && tool !== 'feather') {
+        Bonk.Tools.use(tool, Bonk.clamp(p.x, room.left + 30, room.right - 30), Bonk.clamp(p.y, room.top + 30, room.bottom - 30));
+      }
+    });
+
+    window.addEventListener('pointerup', function () {
+      pt.down = false;
+    });
+
+    /* Touch: keep the page from panning under a drag. */
+    canvas.addEventListener('touchmove', function (e) {
+      e.preventDefault();
+    }, { passive: false });
+  }
+
+  /* The hand pushes when it is near him and moving; the feather tickles. */
+  function handleHover(dt) {
+    var st = Bonk.state;
+    var pt = st.pointer;
+    if (!pt.inside || st.shopOpen) return;
+    var B = Bonk.Buddy;
+
+    if (st.tool === 'feather') {
+      var c = B.center();
+      if (Math.hypot(pt.x - c.x, pt.y - c.y) < 78) B.tickle(dt, { x: pt.x, y: pt.y });
+      return;
+    }
+
+    if (st.tool !== 'hand' || grabbedBuddy) return;
+    var speed = Math.hypot(pt.vx, pt.vy);
+    if (speed < 1.2) return;
+    for (var i = 0; i < B.bodies.length; i++) {
+      var b = B.bodies[i];
+      var dx = b.position.x - pt.x;
+      var dy = b.position.y - pt.y;
+      var d = Math.hypot(dx, dy);
+      if (d > 62) continue;
+      var falloff = 1 - d / 62;
+      M.Body.applyForce(b, b.position, {
+        x: Bonk.clamp(pt.vx, -14, 14) * 0.00016 * falloff * b.mass,
+        y: Bonk.clamp(pt.vy, -14, 14) * 0.00016 * falloff * b.mass
+      });
+    }
+  }
+
+  /* ---- collisions -------------------------------------------------------- */
+  function contactPoint(pair, fallback) {
+    if (pair.collision && pair.collision.supports && pair.collision.supports.length) {
+      return pair.collision.supports[0];
+    }
+    return fallback;
+  }
+
+  function relSpeed(a, b) {
+    return Math.hypot(a.velocity.x - b.velocity.x, a.velocity.y - b.velocity.y);
+  }
+
+  function bounceOffTrampoline(body, prop) {
+    if (trampolineCooldown > 0 && body.isBuddy) return;
+    var vy = body.velocity.y;
+    var boost = Math.max(10, Math.abs(vy) * 1.22);
+    M.Body.setVelocity(body, { x: body.velocity.x * 0.94, y: -Math.min(boost, 22) });
+    prop.squish = 1;
+    Bonk.Sound.boing(Bonk.clamp(boost / 20, 0.3, 1));
+    if (body.isBuddy) {
+      trampolineCooldown = 0.3;
+      Bonk.addMood(0.09);
+      Bonk.Buddy.cheer = Math.max(Bonk.Buddy.cheer, 0.7);
+      Bonk.pay(4 + Math.round(boost / 3), body.position);
+      if (Math.random() < 0.3) Bonk.Buddy.say(Bonk.pick(['wheee', 'again!', 'boing', 'weee']), 1.1);
+    }
+  }
+
+  function onCollisionStart(evt) {
+    var B = Bonk.Buddy;
+    for (var i = 0; i < evt.pairs.length; i++) {
+      var pair = evt.pairs[i];
+      var a = pair.bodyA;
+      var b = pair.bodyB;
+      var part = a.isBuddy ? a : b.isBuddy ? b : null;
+      var other = part === a ? b : a;
+      var speed = relSpeed(a, b);
+
+      if (part) {
+        B.grounded = 0.18;
+        var point = contactPoint(pair, part.position);
+
+        if (other.propKind === 'trampoline' && other.prop && !other.prop.erasing) {
+          bounceOffTrampoline(B.parts.chest, other.prop);
+          continue;
+        }
+
+        if (other.isProp && other.prop && !other.prop.erasing) {
+          var def = other.prop.def;
+          other.prop.squish = 1;
+          if (def.onHit) def.onHit(other.prop, speed, point, part.partName);
+          if (def.scuffMul !== 0) {
+            B.bonk(part.partName, speed, point, { payMul: def.payMul, scuffMul: def.scuffMul });
+            if (speed > Bonk.CONFIG.bigBonkSpeed) shakeScreen(Bonk.clamp(speed / 26, 0.2, 1));
+          }
+          continue;
+        }
+
+        if (other.isStatic) {
+          var floorSpeed = Math.hypot(part.velocity.x, part.velocity.y);
+          B.bonk(part.partName, floorSpeed, point, { payMul: 0.7, scuffMul: 0.75 });
+          if (floorSpeed > Bonk.CONFIG.bigBonkSpeed) {
+            shakeScreen(Bonk.clamp(floorSpeed / 26, 0.2, 0.8));
+            Bonk.Particles.dust(point.x, point.y, 5, 0.8);
+          }
+        }
+        continue;
+      }
+
+      /* Prop meets prop or prop meets room. */
+      var prop = a.prop || b.prop;
+      if (prop && !prop.erasing) {
+        var otherBody = a.prop === prop ? b : a;
+        if (otherBody.propKind === 'trampoline' && otherBody.prop && !otherBody.prop.erasing) {
+          bounceOffTrampoline(prop.body, otherBody.prop);
+          continue;
+        }
+        prop.squish = Math.min(1, prop.squish + speed / 18);
+        if (prop.def.onLand && otherBody.isStatic) {
+          prop.def.onLand(prop, speed, contactPoint(pair, prop.body.position));
+        }
+        if (speed > 7) Bonk.Sound.thud(Bonk.clamp(speed / 20, 0.1, 0.7));
+      }
+    }
+  }
+
+  function onCollisionActive(evt) {
+    for (var i = 0; i < evt.pairs.length; i++) {
+      var pair = evt.pairs[i];
+      if (pair.bodyA.isBuddy || pair.bodyB.isBuddy) {
+        Bonk.Buddy.grounded = 0.18;
+        var other = pair.bodyA.isBuddy ? pair.bodyB : pair.bodyA;
+        if (other.propKind === 'trampoline' && other.prop && !other.prop.erasing && Math.abs(Bonk.Buddy.parts.chest.velocity.y) > 2) {
+          bounceOffTrampoline(Bonk.Buddy.parts.chest, other.prop);
+        }
+      }
+    }
+  }
+
+  /* ---- world effects ----------------------------------------------------- */
+  function shakeScreen(amount) {
+    if (Bonk.state.reducedMotion) return;
+    shake.amount = Math.min(1, shake.amount + amount);
+  }
+  Bonk.shakeScreen = shakeScreen;
+
+  Bonk.flipGravity = function () {
+    gravityFlip = 6.5;
+    Bonk.Sound.party();
+    Bonk.Buddy.say(Bonk.pick(['whoa', 'up is down', 'physics!', 'ceiling office']), 2.2);
+    Bonk.pay(8, Bonk.Buddy.center());
+    /* Give everything a nudge so nothing sits glued to the floor. */
+    Bonk.Buddy.bodies.concat(
+      Bonk.Props.list.map(function (p) {
+        return p.body;
+      })
+    ).forEach(function (b) {
+      if (!b.isStatic) M.Body.applyForce(b, b.position, { x: Bonk.rand(-0.0004, 0.0004) * b.mass, y: -0.0006 * b.mass });
+    });
+  };
+
+  Bonk.freshPage = function () {
+    Bonk.Props.clear();
+    Bonk.Particles.clear();
+    Bonk.Buddy.reset((room.left + room.right) / 2, room.bottom);
+    gravityFlip = 0;
+    engine.gravity.y = 1;
+    if (!Bonk.state.reducedMotion) pageFlip = 1;
+    Bonk.Sound.page();
+    Bonk.Buddy.say(Bonk.pick(['fresh page.', 'clean slate', 'nice.']), 1.8);
+  };
+
+  /* ---- drawing ----------------------------------------------------------- */
+  function buildRoomStrokes() {
+    /* Hand-ruled twice, the way you would trace a box you drew slightly wrong
+       the first time. Precomputed so the tremor never shimmers. */
+    function edge(x1, y1, x2, y2, seed) {
+      return [D.wobble([{ x: x1, y: y1 }, { x: x2, y: y2 }], seed, 1.5, 22), D.wobble([{ x: x1, y: y1 }, { x: x2, y: y2 }], seed + 200, 2.4, 30)];
+    }
+    roomStrokes = {
+      floor: edge(room.left, room.bottom, room.right, room.bottom, 11),
+      ceiling: edge(room.left, room.top, room.right, room.top, 71),
+      leftWall: edge(room.left, room.top, room.left, room.bottom, 131),
+      rightWall: edge(room.right, room.top, room.right, room.bottom, 191)
+    };
+  }
+
+  function drawPaper() {
+    ctx.fillStyle = P.paper;
+    ctx.fillRect(0, 0, W, H);
+
+    var g = 26;
+    ctx.save();
+    ctx.strokeStyle = P.grid;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    for (var x = (W % g) / 2; x < W; x += g) {
+      ctx.moveTo(Math.round(x) + 0.5, 0);
+      ctx.lineTo(Math.round(x) + 0.5, H);
+    }
+    for (var y = (H % g) / 2; y < H; y += g) {
+      ctx.moveTo(0, Math.round(y) + 0.5);
+      ctx.lineTo(W, Math.round(y) + 0.5);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawRoom() {
+    if (!roomStrokes) buildRoomStrokes();
+    var opts1 = { color: P.ink, width: 3.4, alpha: 0.92 };
+    var opts2 = { color: P.ink, width: 1.7, alpha: 0.33 };
+    ['ceiling', 'leftWall', 'rightWall', 'floor'].forEach(function (k) {
+      D.strokePath(ctx, roomStrokes[k][0], k === 'floor' ? { color: P.ink, width: 4.2, alpha: 0.95 } : opts1);
+      D.strokePath(ctx, roomStrokes[k][1], opts2);
+    });
+    /* A little hatching under the floor so the box reads as a room. */
+    D.hatch(ctx, room.left, room.bottom + 3, room.right - room.left, 22, { gap: 13, alpha: 0.28, width: 1.4 });
+  }
+
+  function drawCursor() {
+    var st = Bonk.state;
+    var pt = st.pointer;
+    if (!pt.inside || st.shopOpen) return;
+    ctx.save();
+    ctx.translate(pt.x, pt.y);
+
+    if (st.tool === 'hand') {
+      var grab = pt.down ? 1 : 0;
+      ctx.rotate(-0.18);
+      var palm = D.circlePoints(0, 4, 8 - grab * 1.5, 3, 0.7);
+      D.fillPath(ctx, palm, P.paper, 0.92);
+      D.strokePath(ctx, palm, { color: P.ink, width: 2.2 });
+      for (var i = 0; i < 4; i++) {
+        var fx = -5.5 + i * 3.7;
+        var len = (9 - Math.abs(i - 1.4) * 1.3) * (1 - grab * 0.55);
+        D.line(ctx, fx, -2, fx - 1, -2 - len, { color: P.ink, width: 2.2, seed: 30 + i * 7, amp: 0.4, spacing: 4 });
+      }
+      D.line(ctx, -7, 4, -12, 0.5, { color: P.ink, width: 2.2, seed: 61, amp: 0.4, spacing: 4 });
+    } else if (st.tool === 'feather') {
+      ctx.rotate(0.5 + Math.sin(st.time * 7) * 0.14);
+      D.line(ctx, 0, 14, 1, -13, { color: P.ink, width: 2.2, seed: 9, amp: 0.5 });
+      for (var f = 0; f < 7; f++) {
+        var t = f / 6;
+        var y = 10 - t * 21;
+        var w = 9 * Math.sin(t * 3.1) + 2;
+        D.line(ctx, 0.6, y, -w, y - 4, { color: P.pencil, width: 1.6, seed: f * 11, amp: 0.4, spacing: 4 });
+        D.line(ctx, 0.6, y, w, y - 4, { color: P.pencil, width: 1.6, seed: f * 11 + 3, amp: 0.4, spacing: 4 });
+      }
+    } else {
+      /* Every other tool is a "drop it here" marker. */
+      var def = Bonk.Tools.all[st.tool];
+      ctx.save();
+      ctx.setLineDash([4, 5]);
+      ctx.strokeStyle = P.marker;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.arc(0, 0, 15, 0, 6.29);
+      ctx.stroke();
+      ctx.restore();
+      var placeable = def && def.place;
+      var arrow = placeable ? 1 : -1;
+      D.strokePath(
+        ctx,
+        [
+          { x: 0, y: -6 * arrow },
+          { x: 0, y: 6 * arrow },
+          { x: -4, y: 2 * arrow },
+          { x: 0, y: 6 * arrow },
+          { x: 4, y: 2 * arrow }
+        ],
+        { color: P.marker, width: 2.2 }
+      );
+    }
+    ctx.restore();
+  }
+
+  /* A blank sheet lying over the page, sliding off to the right to reveal the
+     fresh one underneath. */
+  function drawPageFlip() {
+    if (pageFlip <= 0) return;
+    var t = 1 - pageFlip;
+    var x = t * t * (W + 80);
+    ctx.save();
+    ctx.globalAlpha = 0.97;
+    ctx.fillStyle = P.paper;
+    ctx.fillRect(x, 0, W + 80, H);
+    ctx.strokeStyle = P.pencil;
+    ctx.lineWidth = 2.5;
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.quadraticCurveTo(x - 24 * Math.sin(t * 3.1), H / 2, x, H);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* ---- loop -------------------------------------------------------------- */
+  function frame(now) {
+    var dt = Math.min(64, now - last);
+    last = now;
+    var dts = dt / 1000;
+    var st = Bonk.state;
+
+    if (!st.shopOpen) {
+      st.time += dts;
+
+      /* Fixed-step physics, capped so a background tab does not fast-forward
+         the whole room when it comes back. */
+      acc = Math.min(acc + dt, STEP * 4);
+      var guard = 0;
+      while (acc >= STEP && guard < 4) {
+        acc -= STEP;
+        guard++;
+        Bonk.Buddy.update(STEP / 1000, engine.world);
+        Bonk.Props.update(STEP / 1000);
+        M.Engine.update(engine, STEP);
+      }
+
+      /* Pointer-driven forces run once per frame, not once per substep, so a
+         fast flick cannot be applied three times over. */
+      handleHover(dts);
+      mouseConstraint.collisionFilter.mask = st.tool === 'hand' ? 0xffffffff : 0;
+      if (grabbedBuddy) Bonk.Buddy.goRagdoll(0.12);
+      Bonk.state.pointer.vx *= 0.55;
+      Bonk.state.pointer.vy *= 0.55;
+
+      trampolineCooldown = Math.max(0, trampolineCooldown - dts);
+      Bonk.Particles.update(dts);
+
+      /* Gravity flip eases out and back so nothing teleports. */
+      if (gravityFlip > 0) {
+        gravityFlip -= dts;
+        var phase = Bonk.clamp(Math.min(gravityFlip / 1.2, (6.5 - gravityFlip) / 1.2), 0, 1);
+        engine.gravity.y = Bonk.lerp(1, -0.42, phase);
+        if (gravityFlip <= 0) engine.gravity.y = 1;
+      }
+
+      if (shake.amount > 0) {
+        shake.amount = Math.max(0, shake.amount - dts * 3.4);
+        shake.x = Bonk.rand(-1, 1) * shake.amount * 9;
+        shake.y = Bonk.rand(-1, 1) * shake.amount * 9;
+      } else {
+        shake.x = shake.y = 0;
+      }
+      if (pageFlip > 0) pageFlip = Math.max(0, pageFlip - dts * 2.4);
+    }
+
+    Bonk.UI.update(dts);
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawPaper();
+    ctx.save();
+    ctx.translate(shake.x, shake.y);
+    drawRoom();
+    Bonk.BuddyDraw.drawUnder(ctx);
+    Bonk.Props.draw(ctx);
+    Bonk.BuddyDraw.draw(ctx);
+    Bonk.Particles.draw(ctx);
+    ctx.restore();
+    drawCursor();
+    drawPageFlip();
+
+    requestAnimationFrame(frame);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();

@@ -23,8 +23,8 @@
     pelvis: { w: 19, h: 17, cy: 68.5 },
     upperArm: { w: 8, h: 27, cy: 44.5, cx: 11.5 },
     lowerArm: { w: 7.5, h: 25, cy: 70.5, cx: 11.5 },
-    upperLeg: { w: 9, h: 31, cy: 92.5, cx: 5.5 },
-    lowerLeg: { w: 8, h: 33, cy: 124.5, cx: 5.5 }
+    upperLeg: { w: 9, h: 31, cy: 92.5, cx: 7.5 },
+    lowerLeg: { w: 8, h: 33, cy: 124.5, cx: 7.5 }
   };
 
   var JOINT_LIMITS = {
@@ -44,14 +44,16 @@
     torso: 0,
     neck: 0,
     spine: 0,
-    shoulderL: 0.2,
-    shoulderR: -0.2,
-    elbowL: -0.18,
-    elbowR: -0.18,
-    hipL: 0.07,
-    hipR: -0.07,
-    kneeL: 0.05,
-    kneeR: 0.05,
+    /* Arms splayed enough to read as arms: hanging dead vertical merges them
+       into the torso line and he looks like a bundle of sticks. */
+    shoulderL: 0.44,
+    shoulderR: -0.44,
+    elbowL: -0.16,
+    elbowR: -0.16,
+    hipL: 0.1,
+    hipR: -0.1,
+    kneeL: 0.04,
+    kneeR: 0.04,
     height: 1
   };
 
@@ -292,7 +294,10 @@
        Matter turns torque into angular velocity as torque/inertia*dt^2. */
     _pd: function (body, targetAngle, gain, maxV) {
       var err = Bonk.angleDelta(body.angle, targetAngle);
-      var desired = Bonk.clamp(err * 0.15, -(maxV || 0.32), maxV || 0.32);
+      /* 0.5 is the sweet spot from test/physics-check tuning: below it the
+         limbs sag several degrees under their own weight and raised arms
+         droop; above it he starts to read as rigid rather than organic. */
+      var desired = Bonk.clamp(err * 0.5, -(maxV || 0.32), maxV || 0.32);
       var dv = (desired - body.angularVelocity) * gain;
       body.torque += (dv * body.inertia) / DT2;
     },
@@ -426,11 +431,22 @@
 
       var hardHat = Bonk.state.save.hat === 'hard' && partName === 'head';
       var scale = Bonk.clamp((speedAt - C.bonkSpeed) / 16, 0, 1.4);
-      var scuffAmount = scale * 0.16 * (opts.scuffMul == null ? 1 : opts.scuffMul);
+
+      /* One anvil landing on him produces a collision pair per limb it touches.
+         Without this window a single bonk would scuff and pay five times over,
+         so anything inside it still squashes and sounds but barely counts. */
+      var now = Bonk.state.time;
+      var sameImpact = now - (this._lastBonkAt || -9) < 0.15;
+      this._lastBonkAt = now;
+      var weight = sameImpact ? 0.12 : 1;
+
+      /* About three solid hits to reach the well-scuffed band where he gets up
+         the wobbly way instead of kipping. */
+      var scuffAmount = scale * 0.3 * (opts.scuffMul == null ? 1 : opts.scuffMul) * weight;
       if (hardHat) scuffAmount *= 0.22;
 
       Bonk.addScuffs(scuffAmount);
-      Bonk.addMood(-scale * 0.09);
+      Bonk.addMood(-scale * 0.09 * weight);
 
       this.squash = Math.min(1, this.squash + scale * 0.8);
       this.squashAngle = opts.angle || 0;
@@ -458,8 +474,8 @@
         if (Math.random() < 0.4) this.say(Bonk.pick(BONK_LINES), 1.5);
       }
 
-      var coins = Math.round(2 + scale * (opts.payMul == null ? 9 : opts.payMul * 9));
-      Bonk.pay(coins, point || this.center());
+      var coins = Math.round((2 + scale * (opts.payMul == null ? 9 : opts.payMul * 9)) * weight);
+      if (coins >= 1) Bonk.pay(coins, point || this.center());
       return coins;
     },
 
@@ -563,7 +579,7 @@
 
       this.grounded = Math.max(0, this.grounded - dt);
       this.squash *= Math.pow(0.06, dt);
-      this.flatten *= Math.pow(0.09, dt);
+      this.flatten *= Math.pow(0.25, dt); // pancake holds ~half a second
       this.dizzy = Math.max(0, this.dizzy - dt);
       this.soggy = Math.max(0, this.soggy - dt);
       this.cheer = Math.max(0, this.cheer - dt);
@@ -572,6 +588,11 @@
       this.tickleGlow = Math.max(0, this.tickleGlow - dt * 2.5);
       if (this.soggy > 0 && this.soggy < 1.2 && !this.shakeDry) this.shakeDry = 0.9;
       this.shakeDry = Math.max(0, this.shakeDry - dt);
+      if (this.soggy > 1.2 && Bonk.Particles && Math.random() < dt * 7) {
+        var drippy = Bonk.pick(['lowerArmL', 'lowerArmR', 'lowerLegL', 'lowerLegR', 'pelvis']);
+        var dp = this.parts[drippy].position;
+        Bonk.Particles.splash(dp.x, dp.y + 6, 1);
+      }
 
       /* Mood and scuffs settle back toward normal on their own. */
       Bonk.addScuffs(-C.scuffHeal * dt * (1 + st.mood));

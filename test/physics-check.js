@@ -96,21 +96,37 @@ function check(name, ok, detail) {
 }
 
 /* ---- 1. he stands on his own ---------------------------------------- */
+/* Where the head sits when he is fully upright, derived from the skeleton so
+   this survives a change to the configured buddy height. */
+var STAND_HEAD = ((Bonk.Buddy.DESIGN_H - Bonk.Buddy.LAYOUT.head.cy) / Bonk.Buddy.DESIGN_H) * Bonk.CONFIG.buddyHeight;
+
 step(300); // 5s
 var restHeight = headHeight();
-check('stands upright unaided', restHeight > 118 && restHeight < 150, 'head ' + restHeight.toFixed(1) + 'px above floor (expect ~125-142)');
+check(
+  'stands upright unaided',
+  restHeight > STAND_HEAD * 0.93 && restHeight < STAND_HEAD * 1.04,
+  'head ' + restHeight.toFixed(1) + 'px above floor (upright is ' + STAND_HEAD.toFixed(1) + 'px)'
+);
 check('joints hold together at rest', jointStretch() < 3.5, 'worst joint separation ' + jointStretch().toFixed(2) + 'px');
 check('no residual spin at rest', maxAngularVel() < 0.06, 'max |angular velocity| ' + maxAngularVel().toFixed(4));
 
-/* Height must be near-constant while idle: drift means he is sinking or
-   levitating rather than standing. */
+/* Idle motion is deliberate - he breathes and shifts his weight - so measure
+   DRIFT rather than variance. A buddy who is slowly sinking or levitating has
+   a broken balance controller; one who is bobbing is just alive. */
 var hs = [];
-for (var i = 0; i < 120; i++) {
+for (var i = 0; i < 360; i++) {
   step(1);
   hs.push(headHeight());
 }
-var spread = Math.max.apply(null, hs) - Math.min.apply(null, hs);
-check('idle height is stable', spread < 6, 'head height varies ' + spread.toFixed(2) + 'px over 2s (breathing sway)');
+function mean(arr) {
+  return arr.reduce(function (a, b) {
+    return a + b;
+  }, 0) / arr.length;
+}
+var drift = Math.abs(mean(hs.slice(-60)) - mean(hs.slice(0, 60)));
+var lowest = Math.min.apply(null, hs);
+check('idle height does not drift', drift < 8, 'mean head height moved ' + drift.toFixed(2) + 'px over 6s');
+check('never collapses while idle', lowest > STAND_HEAD * 0.6, 'lowest head height ' + lowest.toFixed(1) + 'px of ' + STAND_HEAD.toFixed(1) + 'px upright');
 
 /* ---- 2. a hard fling ragdolls and does not explode -------------------- */
 Matter.Body.setVelocity(buddy.parts.chest, { x: 26, y: -19 });

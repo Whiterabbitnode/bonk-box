@@ -27,11 +27,11 @@
      which lands at mass * 0.001 per step. Anything labelled K is a gain. */
   Bonk.CONFIG = {
     maxProps: 16,
-    buddyHeight: 144,
+    buddyHeight: 172,
 
     /* muscles */
     muscleBlendIn: 0.9, // seconds for muscle strength to ramp 0 -> 1
-    muscleGain: 0.24, // how hard a joint chases its target angle per step
+    muscleGain: 0.3, // how hard a joint chases its target angle per step
     balanceK: 0.000055, // positional pull of the chest toward its stand point
     balanceDamp: 0.0011, // just past critical damping: settles without wobble
     uprightGain: 0.16,
@@ -40,8 +40,10 @@
     bonkSpeed: 5.5,
     bigBonkSpeed: 13,
 
-    /* scuffs and mood drift, per second */
-    scuffHeal: 0.012,
+    /* Scuffs and mood drift, per second. Healing is deliberately slow: cookies
+       and confetti are meant to be the fast way back, and the wobbly get-up
+       only appears once he is genuinely well scuffed. */
+    scuffHeal: 0.006,
     moodDrift: 0.05,
     moodRest: 0.55,
 
