@@ -116,6 +116,65 @@
     buildWalls();
     roomStrokes = null;
     if (mouse) mouse.pixelRatio = dpr;
+
+    /* The room just changed shape around whoever is standing in it. Anyone
+       left outside the new walls has nothing to stand on and falls forever,
+       which is exactly how he ends up frozen off-stage after a window resize. */
+    gatherEveryoneInside();
+  }
+
+  function gatherEveryoneInside() {
+    var B = Bonk.Buddy;
+    if (!B || !B.parts) return;
+    var cx = (room.left + room.right) / 2;
+    var c = B.parts.chest.position;
+    if (!isFinite(c.x) || c.x < room.left + 20 || c.x > room.right - 20 || c.y > room.bottom - 10 || c.y < room.top - 40) {
+      B.reset(cx, room.bottom);
+    }
+    if (Bonk.Friend && Bonk.Friend.exists()) {
+      var f = Bonk.Friend.body;
+      if (!isFinite(f.x) || f.position.x < room.left + 10 || f.position.x > room.right - 10 || f.position.y > room.bottom - 5) {
+        M.Body.setPosition(f, { x: Bonk.clamp(cx - 70, room.left + 40, room.right - 40), y: room.bottom - 40 });
+        M.Body.setVelocity(f, { x: 0, y: 0 });
+      }
+    }
+    for (var i = 0; i < Bonk.Props.list.length; i++) {
+      var b = Bonk.Props.list[i].body;
+      if (b.position.x < room.left || b.position.x > room.right || b.position.y > room.bottom + 40) {
+        M.Body.setPosition(b, { x: Bonk.clamp(b.position.x, room.left + 40, room.right - 40), y: Math.min(b.position.y, room.bottom - 40) });
+        M.Body.setVelocity(b, { x: 0, y: 0 });
+      }
+    }
+  }
+
+  /* Defence in depth: whatever put him out there, he comes back. Checked a
+     couple of times a second rather than every frame - it is a safety net,
+     not a hot path. */
+  var strayCheck = 0;
+  function watchForStrays(dt) {
+    strayCheck += dt;
+    if (strayCheck < 0.5) return;
+    strayCheck = 0;
+    var B = Bonk.Buddy;
+    var c = B.parts.chest.position;
+    var margin = 70;
+    var lost =
+      !isFinite(c.x) ||
+      !isFinite(c.y) ||
+      c.x < room.left - margin ||
+      c.x > room.right + margin ||
+      c.y > room.bottom + 140 ||
+      c.y < room.top - 220;
+    if (lost) B.rescue((room.left + room.right) / 2, room.bottom);
+
+    if (Bonk.Friend && Bonk.Friend.exists()) {
+      var f = Bonk.Friend.body.position;
+      if (!isFinite(f.x) || f.x < room.left - margin || f.x > room.right + margin || f.y > room.bottom + 140) {
+        M.Body.setPosition(Bonk.Friend.body, { x: Bonk.clamp(B.center().x - 70, room.left + 40, room.right - 40), y: room.bottom - 40 });
+        M.Body.setVelocity(Bonk.Friend.body, { x: 0, y: 0 });
+        Bonk.Particles.crumbs(f.x, f.y, 8);
+      }
+    }
   }
 
   function buildWalls() {
@@ -773,6 +832,7 @@
       Bonk.state.pointer.vy *= 0.55;
 
       trampolineCooldown = Math.max(0, trampolineCooldown - dts);
+      watchForStrays(dts);
       Bonk.Particles.update(dts);
 
       /* Gravity flip eases out and back so nothing teleports. */

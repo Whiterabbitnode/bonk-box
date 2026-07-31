@@ -1013,6 +1013,31 @@
       this.idle = { name: name, t: 0, dur: IDLE[name].dur, drew: false };
     },
 
+    /* Rub him out and draw him again in the middle of the room.
+
+       The failsafe for ever ending up somewhere he cannot come back from -
+       outside the walls after the window was resized around him, most likely.
+       Thematically this is the only honest repair for a doodle: erase, redraw.
+       Uses the same stroke-by-stroke redraw as getting up from a bad fall. */
+    rescue: function (x, groundY) {
+      var at = this.parts.chest.position;
+      if (Bonk.Particles && isFinite(at.x) && isFinite(at.y)) {
+        Bonk.Particles.crumbs(at.x, at.y, 16);
+        Bonk.Particles.dust(at.x, at.y, 5, 1);
+      }
+      this.reset(x, groundY);
+      /* Come back in ink, one stroke at a time. */
+      var order = 0;
+      for (var id in this.strokes) {
+        this.strokes[id] = { ink: 0, smudged: true, delay: 0.06 + order * 0.12, drawing: true };
+        order++;
+      }
+      this.dizzy = 0;
+      this.say(Bonk.pick(['redrawn.', 'where was I?', 'better.', 'much better.']), 2.4);
+      if (Bonk.Particles) Bonk.Particles.dust(x, groundY - 20, 6, 0.9);
+      if (Bonk.Sound) Bonk.Sound.poof();
+    },
+
     /* Reset for a fresh page: keeps coins and scuffs history, re-centres him. */
     reset: function (x, groundY) {
       var M = window.Matter;
