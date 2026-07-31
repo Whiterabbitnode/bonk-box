@@ -29,6 +29,19 @@ const MINI_H: f64 = 280.0;
 const DEFAULT_PORT: u16 = 48222;
 const PEEK_SECONDS: u64 = 8;
 
+/// The shortest a visit may last, per event. An event that raises an ask must
+/// outlive the sign the page draws for it, or he slides off half way through
+/// his own question - in a corner, without focus, where nobody can catch him.
+/// These are the floors; `hold_peek` lets the page ask for longer, never
+/// shorter. Keep them at or above the lifetimes in js/agent-events.js.
+fn peek_seconds(kind: &str) -> u64 {
+    match kind {
+        "heated" => 17,
+        "update" => 62,
+        _ => PEEK_SECONDS,
+    }
+}
+
 /// Puts the sliding flag back down on every exit path, including early
 /// returns and panics.
 struct SlideGuard(AppHandle);
@@ -48,6 +61,12 @@ struct PeekState {
     /// Everything else is a visit he pays himself, and those must not linger.
     user_opened: AtomicBool,
     last_event: Mutex<Instant>,
+    /// The earliest he may start retreating. Set by the peek itself from the
+    /// event kind, so the floor is in place before the page has said anything,
+    /// and only ever extended afterwards. Deriving the hold from the page
+    /// alone was a race: the peek resets the idle clock the moment it starts,
+    /// and the bridge call that asked for a longer visit arrives after it.
+    hold_until: Mutex<Instant>,
 }
 
 /// Where the window rests while peeking, and where it waits out of sight.
@@ -458,11 +477,18 @@ fn peek(app: &AppHandle, kind: &str) {
         if let Ok(mut t) = state.last_event.lock() {
             *t = Instant::now();
         }
+        // Claim the visit's own lifetime up front, before the page has had a
+        // chance to say anything. Extend a longer hold rather than cutting it.
+        let floor = Instant::now() + Duration::from_secs(peek_seconds(kind));
+        if let Ok(mut h) = state.hold_until.lock() {
+            if floor > *h {
+                *h = floor;
+            }
+        }
         if state.sliding.swap(true, Ordering::SeqCst) {
             return; // already on screen or on its way
         }
     }
-    let _ = kind;
 
     let app = app.clone();
     std::thread::spawn(move || {
@@ -494,6 +520,16 @@ fn peek(app: &AppHandle, kind: &str) {
             let state = app.state::<PeekState>();
             if state.engaged.load(Ordering::SeqCst) {
                 return; // clicked into: he stays until you send him away
+            }
+            // An ask that is still on the page holds him here, however quiet
+            // it has been. Answering it releases the hold and he leaves.
+            let held = state
+                .hold_until
+                .lock()
+                .map(|h| Instant::now() < *h)
+                .unwrap_or(false);
+            if held {
+                continue;
             }
             let idle = state
                 .last_event
@@ -551,17 +587,24 @@ fn toggle(app: &AppHandle) {
 /// Keep the window up for as long as an ask needs. The 8s retreat used to
 /// undercut a 15s ask, so an offer left the screen halfway through its own
 /// life - in a corner, without focus. An offer nobody can catch is no offer.
+///
+/// Only ever extends. The peek has already claimed a floor for its own kind,
+/// and a second ask arriving must not be able to shorten the first.
 #[tauri::command]
 fn hold_peek(app: AppHandle, seconds: u64) {
-    // The retreat waits for PEEK_SECONDS of quiet, so push the clock forward
-    // to buy the ask the time it asked for.
-    let until = Instant::now() + Duration::from_secs(seconds.saturating_sub(PEEK_SECONDS).min(300));
-    let state = app.state::<PeekState>();
-    let mut guard = match state.last_event.lock() {
-        Ok(g) => g,
-        Err(_) => return,
-    };
-    *guard = until;
+    let until = Instant::now() + Duration::from_secs(seconds.min(600));
+    if let Ok(mut h) = app.state::<PeekState>().hold_until.lock() {
+        if until > *h {
+            *h = until;
+        }
+    }
+}
+
+/// The ask is over, so nothing is holding him here any more.
+fn release_hold(app: &AppHandle) {
+    if let Ok(mut h) = app.state::<PeekState>().hold_until.lock() {
+        *h = Instant::now();
+    }
 }
 
 /// "Later" is the only answer that defers to tomorrow. An offer that simply
@@ -591,6 +634,7 @@ fn stand_down(app: AppHandle) {
     state.engaged.store(false, Ordering::SeqCst);
     state.sliding.store(false, Ordering::SeqCst);
     state.user_opened.store(false, Ordering::SeqCst);
+    release_hold(&app);
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
         // Resize only once he is out of sight, then leave him somewhere sane
@@ -645,9 +689,13 @@ fn set_engaged(app: AppHandle, engaged: bool) {
             }
         }
         ensure_on_screen(&app);
-    } else if let Ok(mut t) = state.last_event.lock() {
-        // Start the retreat countdown from now.
-        *t = Instant::now() - Duration::from_secs(PEEK_SECONDS.saturating_sub(1));
+    } else {
+        // You answered, so the ask is no longer holding him here.
+        release_hold(&app);
+        if let Ok(mut t) = state.last_event.lock() {
+            // Start the retreat countdown from now.
+            *t = Instant::now() - Duration::from_secs(PEEK_SECONDS.saturating_sub(1));
+        }
     }
 }
 
@@ -661,6 +709,7 @@ fn main() {
             engaged: AtomicBool::new(false),
             user_opened: AtomicBool::new(false),
             last_event: Mutex::new(Instant::now()),
+            hold_until: Mutex::new(Instant::now()),
         })
         .invoke_handler(tauri::generate_handler![set_engaged, apply_update, stand_down, hold_peek, defer_update_check])
         .setup(move |app| {

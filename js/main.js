@@ -91,6 +91,23 @@
 
   var room = (Bonk.room = { left: 0, right: 0, top: 0, bottom: 0 });
 
+  /* The one conversion from a pointer to the coordinates everything is drawn
+     in. It scales as well as offsets, and the scale is the whole point: the
+     drawing surface has a floor of 320x360 world units, so in the small peek
+     box a 360-unit world is DISPLAYED in 280 css pixels and the two spaces
+     disagree by nearly a third vertically. Subtracting the canvas rect alone
+     is not enough - the canvas sits at inset 0, so that subtracts nothing at
+     all, and a click visually on a button lands 30 units above it and misses.
+     Everything that hit-tests against something drawn comes through here. */
+  function toWorld(clientX, clientY) {
+    var r = canvas.getBoundingClientRect();
+    return {
+      x: r.width ? ((clientX - r.left) * W) / r.width : 0,
+      y: r.height ? ((clientY - r.top) * H) / r.height : 0
+    };
+  }
+  Bonk.toWorld = toWorld;
+
   /* ---- setup ----------------------------------------------------------- */
   function layout() {
     var rect = canvas.getBoundingClientRect();
@@ -299,13 +316,8 @@
   function bindPointer() {
     var pt = Bonk.state.pointer;
 
-    function toWorld(e) {
-      var r = canvas.getBoundingClientRect();
-      return { x: e.clientX - r.left, y: e.clientY - r.top };
-    }
-
     canvas.addEventListener('pointermove', function (e) {
-      var p = toWorld(e);
+      var p = toWorld(e.clientX, e.clientY);
       pt.vx = p.x - pt.x;
       pt.vy = p.y - pt.y;
       pt.x = p.x;
@@ -329,7 +341,7 @@
     });
 
     canvas.addEventListener('pointerdown', function (e) {
-      var p = toWorld(e);
+      var p = toWorld(e.clientX, e.clientY);
       pt.x = p.x;
       pt.y = p.y;
       pt.down = true;

@@ -11,6 +11,15 @@
   'use strict';
   var Bonk = (window.Bonk = window.Bonk || {});
 
+  /* How long each ask stays up, in seconds. A heated moment is fleeting and
+     should not hang around; a new build has to survive you looking away and
+     coming back. The window is held open for a couple of seconds longer than
+     whichever ask is up, so the sign always dismisses itself rather than
+     sliding off mid-question. desktop/src-tauri/src/main.rs keeps a matching
+     floor per event, so a slow bridge cannot undercut this either. */
+  var ASK_LIFE = { heated: 15, update: 60 };
+  var HOLD_SLACK = 2;
+
   var Agent = {
     ask: null, // the heated prompt, when he is offering to take one for you
     lastAuto: 0,
@@ -59,12 +68,19 @@
       }
     },
 
+    /* Put an ask on screen and keep the window there for as long as it lives.
+       The lifetime belongs to the ask, not to the window. */
+    raise: function (kind) {
+      var life = ASK_LIFE[kind] || ASK_LIFE.heated;
+      this.ask = { t: 0, kind: kind, life: life };
+      this.hold(life + HOLD_SLACK);
+      document.body.classList.add('reacting');
+    },
+
     /* The ask. He holds up a sign and offers himself as the outlet. */
     offer: function () {
       var B = Bonk.Buddy;
-      this.hold(16);
-      this.ask = { t: 0, life: 15 };
-      document.body.classList.add('reacting');
+      this.raise('heated');
       B.speech = null;
       B.idle = { name: 'lookaround', t: 0, dur: 6 };
       Bonk.Sound.pop(0.8);
@@ -93,15 +109,9 @@
     update: function (dt) {
       if (this.ask) {
         this.ask.t += dt;
-        /* Each ask sets its own lifetime: a heated moment is fleeting, an
-           update offer has to survive you looking away. */
-        if (this.ask.t > (this.ask.life || 15)) {
-          var wasUpdate = this.ask.kind === 'update';
-          this.dismiss();
-          /* An offer nobody answered is not a decision, so it is not deferred
-             to tomorrow - it comes back next launch. */
-          if (wasUpdate) return;
-        }
+        /* He does not nag. An ask that ran out is not an answer either, so
+           nothing is recorded here - an offer you missed comes back. */
+        if (this.ask.t > (this.ask.life || ASK_LIFE.heated)) this.dismiss();
       }
     },
 
@@ -122,9 +132,7 @@
     /* A newer build exists. He is the one who tells you. */
     updateReady: function (version, url) {
       this.pending = { version: version, url: url };
-      this.hold(62);
-      this.ask = { t: 0, kind: 'update', life: 60 };
-      document.body.classList.add('reacting');
+      this.raise('update');
       Bonk.Buddy.speech = null;
       Bonk.Sound.pop(1.3);
     },
@@ -163,29 +171,22 @@
     },
 
     /* Hit test for the two drawn buttons.
-       Takes VIEWPORT coordinates and does the conversion itself. Two callers
-       were passing different coordinate spaces into this - one converted, one
-       raw - so a click that was visually on the button missed it, the window
-       expanded instead, and the update button was simply not clickable. One
-       function owning the conversion is the only way that stays fixed. */
+       Takes VIEWPORT coordinates and converts them through Bonk.toWorld, the
+       same one conversion every other click on the page uses. Both callers
+       used to hand this raw viewport coordinates and compare them against
+       boxes recorded while drawing, which are in world units. In the full box
+       those spaces happen to agree and it looked fine; in the small peek box
+       a 360-unit world is displayed in 280 pixels, so a click visually on the
+       button landed thirty units above it, missed, and fell through to the
+       engage path - which is why the button expanded the window instead of
+       taking the answer. One conversion, owned in one place. */
     buttonAt: function (clientX, clientY) {
-      if (!this.ask || !this.ask.boxes) return null;
-      var canvas = document.getElementById('page');
-      if (!canvas) return null;
-      var r = canvas.getBoundingClientRect();
-      var x = clientX - r.left;
-      var y = clientY - r.top;
+      if (!this.ask || !this.ask.boxes || !Bonk.toWorld) return null;
+      var p = Bonk.toWorld(clientX, clientY);
       var pad = 6; // a doodled button deserves a forgiving edge
       var b = this.ask.boxes;
-      if (x >= b.yes.x - pad && x <= b.yes.x + b.yes.w + pad && y >= b.yes.y - pad && y <= b.yes.y + b.yes.h + pad) return 'yes';
-      if (x >= b.no.x - pad && x <= b.no.x + b.no.w + pad && y >= b.no.y - pad && y <= b.no.y + b.no.h + pad) return 'no';
-      return null;
-    },
-
-    _unusedButtonAt: function (x, y) {
-      var b = this.ask.boxes;
-      if (x >= b.yes.x && x <= b.yes.x + b.yes.w && y >= b.yes.y && y <= b.yes.y + b.yes.h) return 'yes';
-      if (x >= b.no.x && x <= b.no.x + b.no.w && y >= b.no.y && y <= b.no.y + b.no.h) return 'no';
+      if (p.x >= b.yes.x - pad && p.x <= b.yes.x + b.yes.w + pad && p.y >= b.yes.y - pad && p.y <= b.yes.y + b.yes.h + pad) return 'yes';
+      if (p.x >= b.no.x - pad && p.x <= b.no.x + b.no.w + pad && p.y >= b.no.y - pad && p.y <= b.no.y + b.no.h + pad) return 'no';
       return null;
     },
 
