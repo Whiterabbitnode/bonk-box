@@ -16,8 +16,15 @@ use std::time::{Duration, Instant};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager, PhysicalPosition,
+    AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition,
 };
+
+const FULL_W: f64 = 560.0;
+const FULL_H: f64 = 460.0;
+/* Ambient events open a small box in the corner rather than the whole toy -
+   he should be able to say something without taking over your screen. */
+const MINI_W: f64 = 380.0;
+const MINI_H: f64 = 280.0;
 
 const DEFAULT_PORT: u16 = 48222;
 const PEEK_SECONDS: u64 = 8;
@@ -61,6 +68,14 @@ fn primary(app: &AppHandle) -> Option<tauri::Monitor> {
     app.available_monitors().ok()?.into_iter().next()
 }
 
+fn corner() -> String {
+    config_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|v| v.get("peekCorner").and_then(|c| c.as_str()).map(String::from))
+        .unwrap_or_else(|| "top-right".into())
+}
+
 fn perch_for(app: &AppHandle) -> Option<Perch> {
     let window = app.get_webview_window("main")?;
     let monitor = primary(app)?;
@@ -69,12 +84,41 @@ fn perch_for(app: &AppHandle) -> Option<Perch> {
     let scale = monitor.scale_factor();
     let size = window.outer_size().ok()?;
     let margin = (24.0 * scale) as i32;
-    let x = origin.x + screen.width as i32 - size.width as i32 - margin;
-    let y = (origin.y + (screen.height as i32 - size.height as i32) / 2).max(origin.y + margin);
+    let w = size.width as i32;
+    let h = size.height as i32;
+
+    let right = origin.x + screen.width as i32 - w - margin;
+    let left = origin.x + margin;
+    let top = origin.y + margin;
+    let bottom = origin.y + screen.height as i32 - h - margin;
+
+    let (x, y) = match corner().as_str() {
+        "top-left" => (left, top),
+        "bottom-left" => (left, bottom),
+        "bottom-right" => (right, bottom),
+        _ => (right, top),
+    };
+    let off = origin.x + screen.width as i32 + margin;
+    let off_left = origin.x - w - margin;
     Some(Perch {
         shown: PhysicalPosition::new(x, y),
-        hidden: PhysicalPosition::new(origin.x + screen.width as i32 + margin, y),
+        hidden: PhysicalPosition::new(if x <= left { off_left } else { off }, y),
     })
+}
+
+/// Ambient events get the small box; you asking for him gets the whole toy.
+fn set_compact(app: &AppHandle, compact: bool) {
+    let Some(window) = app.get_webview_window("main") else { return };
+    let size = if compact {
+        LogicalSize::new(MINI_W, MINI_H)
+    } else {
+        LogicalSize::new(FULL_W, FULL_H)
+    };
+    let _ = window.set_size(size);
+    let _ = window.eval(&format!(
+        "document.body.classList.toggle('compact',{})",
+        compact
+    ));
 }
 
 /// A clamp, not a heuristic: if the window's frame touches no screen at all,
@@ -137,12 +181,195 @@ fn read_config() -> (u16, bool) {
     (port, auto_focus)
 }
 
+/// ---- updates ---------------------------------------------------------
+/// Ask GitHub, quietly, whether there is a newer build. Any failure at all -
+/// no network, rate limit, odd JSON - is a silent skip. The toy never nags and
+/// never blocks on this.
+fn fetch_latest() -> Option<(String, String)> {
+    let out = std::process::Command::new("curl")
+        .args([
+            "-fsSL",
+            "--max-time",
+            "6",
+            "-H",
+            "Accept: application/vnd.github+json",
+            "https://api.github.com/repos/eddiesanjuan/bonk-box/releases/latest",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    let tag = v.get("tag_name")?.as_str()?.trim_start_matches('v').to_string();
+    let url = v
+        .get("assets")?
+        .as_array()?
+        .iter()
+        .find(|a| {
+            a.get("name")
+                .and_then(|n| n.as_str())
+                .map(|n| n.ends_with(".app.zip"))
+                .unwrap_or(false)
+        })?
+        .get("browser_download_url")?
+        .as_str()?
+        .to_string();
+    Some((tag, url))
+}
+
+fn parts(v: &str) -> (u32, u32, u32) {
+    let mut it = v.split('.').map(|p| p.parse::<u32>().unwrap_or(0));
+    (
+        it.next().unwrap_or(0),
+        it.next().unwrap_or(0),
+        it.next().unwrap_or(0),
+    )
+}
+
+fn is_newer(candidate: &str, running: &str) -> bool {
+    parts(candidate) > parts(running)
+}
+
+/// Once a day on launch, or whenever asked from the tray.
+fn should_check_today() -> bool {
+    let Some(dir) = config_path().and_then(|p| p.parent().map(|d| d.to_path_buf())) else {
+        return true;
+    };
+    let stamp = dir.join("last-update-check");
+    let today = std::process::Command::new("date")
+        .arg("+%Y-%m-%d")
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    if std::fs::read_to_string(&stamp).map(|s| s.trim() == today).unwrap_or(false) {
+        return false;
+    }
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(&stamp, &today);
+    true
+}
+
+fn check_for_updates(app: AppHandle, forced: bool) {
+    std::thread::spawn(move || {
+        if !forced && !should_check_today() {
+            return;
+        }
+        let Some((tag, url)) = fetch_latest() else { return };
+        let running = env!("CARGO_PKG_VERSION");
+        if !is_newer(&tag, running) {
+            if forced {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.eval("window.Bonk&&Bonk.Agent&&Bonk.Agent.upToDate()");
+                }
+            }
+            return;
+        }
+        if let Some(w) = app.get_webview_window("main") {
+            // Tag and url come from GitHub's own JSON for this one repo.
+            let _ = w.eval(&format!(
+                "window.Bonk&&Bonk.Agent&&Bonk.Agent.updateReady({},{})",
+                serde_json::to_string(&tag).unwrap_or_default(),
+                serde_json::to_string(&url).unwrap_or_default()
+            ));
+        }
+        peek(&app, "update");
+    });
+}
+
+/// Stage the whole thing before touching /Applications, so a failed download
+/// can never leave you with half an app.
+#[tauri::command]
+fn apply_update(app: AppHandle, url: String) -> Result<(), String> {
+    if !url.starts_with("https://github.com/eddiesanjuan/bonk-box/") {
+        return Err("that download does not come from Bonk Box".into());
+    }
+    let tmp = std::env::temp_dir().join("bonk-box-update");
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
+    let zip = tmp.join("bonkbox.zip");
+
+    let got = std::process::Command::new("curl")
+        .args(["-fsSL", "--max-time", "120", "-o"])
+        .arg(&zip)
+        .arg(&url)
+        .status()
+        .map_err(|e| e.to_string())?;
+    if !got.success() {
+        return Err("the download did not finish".into());
+    }
+
+    let unpacked = tmp.join("unpacked");
+    std::fs::create_dir_all(&unpacked).map_err(|e| e.to_string())?;
+    let ok = std::process::Command::new("ditto")
+        .args(["-x", "-k"])
+        .arg(&zip)
+        .arg(&unpacked)
+        .status()
+        .map_err(|e| e.to_string())?;
+    if !ok.success() {
+        return Err("could not unpack the download".into());
+    }
+
+    let staged = unpacked.join("Bonk Box.app");
+    if !staged.join("Contents/MacOS").exists() {
+        return Err("that download does not look like Bonk Box".into());
+    }
+
+    // A tiny helper outlives us: waits for this process to go, swaps the app,
+    // and opens the new one. Standard macOS self-replace.
+    let helper = tmp.join("swap.sh");
+    let script = format!(
+        "#!/bin/bash\nfor i in $(seq 1 60); do pgrep -f 'Bonk Box.app/Contents/MacOS' >/dev/null || break; sleep 0.5; done\nrm -rf '/Applications/Bonk Box.app'\nditto '{}' '/Applications/Bonk Box.app'\nxattr -cr '/Applications/Bonk Box.app' 2>/dev/null\nopen -a '/Applications/Bonk Box.app'\n",
+        staged.display()
+    );
+    std::fs::write(&helper, script).map_err(|e| e.to_string())?;
+    std::process::Command::new("chmod")
+        .arg("+x")
+        .arg(&helper)
+        .status()
+        .map_err(|e| e.to_string())?;
+    std::process::Command::new("nohup")
+        .arg("bash")
+        .arg(&helper)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    app.exit(0);
+    Ok(())
+}
+
+/// Which events are allowed to put a window on your screen.
+///
+/// He appears for the things you asked for and for the one thing worth
+/// interrupting you about. Everything else happens quietly in a box you are
+/// not looking at, which is the whole point of not being a nuisance.
+/// Re-enable per event in config.json if you want the chatty version.
+fn may_peek(kind: &str) -> bool {
+    let allowed_by_default = matches!(kind, "heated" | "bonk" | "update");
+    let key = match kind {
+        "oops" => "oops",
+        "cheer" => "cheer",
+        "echo-absolutely-right" => "echo",
+        _ => return allowed_by_default,
+    };
+    config_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|v| v.get("peekOn").and_then(|o| o.get(key)).and_then(|b| b.as_bool()))
+        .unwrap_or(false)
+}
+
 /// Only these five words are ever accepted. Anything else is refused.
 fn event_type_from(body: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(body).ok()?;
     let kind = v.get("type")?.as_str()?;
     match kind {
         "oops" | "cheer" | "heated" | "echo-absolutely-right" | "bonk" => Some(kind.to_string()),
+        // "update" is ours, raised internally - it is not accepted over the wire.
         _ => None,
     }
 }
@@ -188,7 +415,9 @@ fn serve(app: AppHandle, port: u16) {
                     ));
                 }
                 let _ = app.emit("bonk-event", kind.clone());
-                peek(&app, &kind);
+                if may_peek(&kind) {
+                    peek(&app, &kind);
+                }
             }
             None => respond(stream, "400 Bad Request"),
         }
@@ -203,6 +432,8 @@ fn peek(app: &AppHandle, kind: &str) {
 
     // If the app was properly hidden, bring the window back WITHOUT activating
     // it: no app.show(), no set_focus. Ordering it front is enough to be seen.
+    // Shrink first, so the perch is computed for the small box.
+    set_compact(app, true);
     if !window.is_visible().unwrap_or(false) {
         if let Some(perch) = perch_for(app) {
             let _ = window.set_position(perch.hidden);
@@ -292,6 +523,7 @@ fn toggle(app: &AppHandle) {
         // focus here is correct: you asked for him.
         #[cfg(target_os = "macos")]
         let _ = app.show();
+        set_compact(app, false);
         if let Some(perch) = perch_for(app) {
             let _ = window.set_position(perch.shown);
         }
@@ -308,9 +540,21 @@ fn set_engaged(app: AppHandle, engaged: bool) {
     let state = app.state::<PeekState>();
     state.engaged.store(engaged, Ordering::SeqCst);
     if engaged {
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.set_focus();
+        // You clicked into him, so he gets the whole box and may take focus.
+        set_compact(&app, false);
+        if let Some(m) = primary(&app) {
+            if let Some(window) = app.get_webview_window("main") {
+                if let Ok(size) = window.outer_size() {
+                    let o = m.position();
+                    let s = m.size();
+                    let x = o.x + (s.width as i32 - size.width as i32) / 2;
+                    let y = o.y + (s.height as i32 - size.height as i32) / 2;
+                    let _ = window.set_position(PhysicalPosition::new(x, y));
+                }
+                let _ = window.set_focus();
+            }
         }
+        ensure_on_screen(&app);
     } else if let Ok(mut t) = state.last_event.lock() {
         // Start the retreat countdown from now.
         *t = Instant::now() - Duration::from_secs(PEEK_SECONDS.saturating_sub(1));
@@ -327,11 +571,12 @@ fn main() {
             engaged: AtomicBool::new(false),
             last_event: Mutex::new(Instant::now()),
         })
-        .invoke_handler(tauri::generate_handler![set_engaged])
+        .invoke_handler(tauri::generate_handler![set_engaged, apply_update])
         .setup(move |app| {
             let show_hide = MenuItem::with_id(app, "toggle", "Show / Hide", true, None::<&str>)?;
+            let updates = MenuItem::with_id(app, "updates", "Check for Updates", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Bonk Box", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_hide, &quit])?;
+            let menu = Menu::with_items(app, &[&show_hide, &updates, &quit])?;
 
             // A template icon uses only its alpha channel, so this has to be
             // the bare stickman on transparency - handing it the app icon, which
@@ -347,6 +592,7 @@ fn main() {
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "toggle" => toggle(app),
+                    "updates" => check_for_updates(app.clone(), true),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -380,6 +626,8 @@ fn main() {
 
             let handle = app.handle().clone();
             std::thread::spawn(move || serve(handle, port));
+
+            check_for_updates(app.handle().clone(), false);
 
             Ok(())
         })

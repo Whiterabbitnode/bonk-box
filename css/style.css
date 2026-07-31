@@ -583,6 +583,12 @@ body.reacting .hud-bottom {
   transition: opacity 0.35s ease;
 }
 
+/* The small box that ambient events open: him, his sign, and nothing else. */
+body.compact .hud,
+body.compact .footer {
+  display: none;
+}
+
 /* ---- focus ------------------------------------------------------------- */
 :focus-visible {
   outline: 3px dashed var(--marker);

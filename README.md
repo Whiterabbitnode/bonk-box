@@ -265,6 +265,34 @@ installing.
 To undo: `./scripts/uninstall-hooks.sh`. It removes only our entries and backs
 up your settings first, same as the installer.
 
+## Updating
+
+He checks once a day and tells you himself: a sign saying the new version is
+out, with **update now** and **later**. "Update now" fetches the release, swaps
+the app and relaunches. There is also **Check for Updates** in the menu-bar
+menu. Any network trouble is a silent skip — he never nags and never blocks.
+
+Installs from before v0.4.0 have no in-app updater. Bridge them once with the
+agent line, which works for any version:
+
+> update bonk-box from github.com/eddiesanjuan/bonk-box
+
+`install.sh` is the updater — it always fetches the newest release.
+
+## When he shows up
+
+By default he only appears for three things: **heated language in your prompt**,
+**⌥⌘B**, and the **`bonk`** command. Everything else your agent does reaches him
+quietly, and he reacts in a box you are not looking at.
+
+When he does appear for an event it is a small box in the corner — him, his
+sign, and nothing else. Click it and it opens into the full toy. Turn the quiet
+ones back on per event in `~/.config/bonk-box/config.json`:
+
+```json
+{ "peekOn": { "oops": true, "cheer": true, "echo": true }, "peekCorner": "top-right" }
+```
+
 ## Buy him a cookie
 
 Bonk Box is free, and it stays free. There is nothing to unlock with money and

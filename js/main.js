@@ -339,8 +339,9 @@
       Bonk.Sound.start();
       var pick = Bonk.Agent.buttonAt(p.x, p.y);
       if (pick) {
-        if (pick === 'yes') Bonk.Agent.accept();
-        else Bonk.Agent.decline();
+        var isUpdate = Bonk.Agent.ask && Bonk.Agent.ask.kind === 'update';
+        if (pick === 'yes') isUpdate ? Bonk.Agent.updateNow() : Bonk.Agent.accept();
+        else isUpdate ? Bonk.Agent.updateLater() : Bonk.Agent.decline();
         return;
       }
 

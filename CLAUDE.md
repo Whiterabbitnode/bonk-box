@@ -104,6 +104,21 @@ node test/physics-check.js   # all 16 checks
 Then look at it in a browser. The headless check catches broken; it cannot
 tell you whether something is delightful.
 
+## Peek policy (binding)
+
+He appears for **heated**, **⌥⌘B** and **bonk** only. Ambient events (oops,
+cheer, echo) are off by default and re-enabled per event in config. An ask must
+dismiss completely — sign, buttons, hit boxes and chrome fade — on answer or
+after 15 seconds. A half-dismissed ask leaves invisible buttons on the page.
+
+## Updating
+
+Self-update shells out to `curl` and `ditto` rather than taking a dependency,
+stages the whole app before touching `/Applications`, and hands off to a
+detached helper for the swap. Tauri's official updater plugin with signed
+manifests is the robust long-term answer; it needs signing-key management, which
+was deliberately not taken on here.
+
 ## Verification
 
 Use the agent-browser CLI with a unique `--session`, re-snapshot after any DOM
