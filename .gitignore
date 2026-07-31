@@ -3,3 +3,4 @@ desktop/node_modules/
 desktop/dist/
 desktop/src-tauri/target/
 *.app.zip
+desktop/src-tauri/gen/
