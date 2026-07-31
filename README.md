@@ -52,7 +52,7 @@ looks fine without one.
 
 ## How to play
 
-Start with three toys and no coins.
+Start with three toys and the 50 coins he hands you for showing up.
 
 - **Hand** (1) — hover near him for a nudge; click and drag any limb to pick him
   up and fling him. This is the whole toy, really.
