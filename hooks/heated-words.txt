@@ -1,0 +1,36 @@
+# Words that suggest the session is going badly.
+#
+# Matched case-insensitively as whole words against your prompt, LOCALLY, inside
+# the hook script. The text never leaves that script - only the word "heated"
+# crosses localhost to the app. Nothing is logged.
+#
+# Common frustration and profanity only. No slurs, and nothing about anybody's
+# identity. Edit freely: one word or phrase per line, # for comments.
+fuck
+fucking
+fucked
+shit
+shitty
+bullshit
+damn
+dammit
+goddamn
+christ
+hell
+crap
+wtf
+ffs
+omfg
+stupid
+idiotic
+useless
+garbage
+broken again
+still broken
+seriously
+are you kidding
+you keep
+stop doing
+i said
+listen to me
+for the love of

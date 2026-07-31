@@ -207,6 +207,11 @@ Tell them: **Option+Command+B** hides and summons the window, the menu-bar
 stickman has Show / Hide and Quit, and uninstalling is dragging
 `Bonk Box` from `/Applications` to the Trash.
 
+If — and only if — they explicitly ask to wire him to their coding agent, clone
+the repo and run `./scripts/install-hooks.sh`. Never do that step silently: it
+edits their Claude Code settings (additively, with a backup, and there is a
+matching uninstaller).
+
 The repository is `github.com/eddiesanjuan/bonk-box`.
 
 ## Credits
@@ -216,6 +221,49 @@ have not played the original, play the original.
 
 Physics by [matter-js](https://brm.io/matter-js/). Everything drawn at runtime
 on a canvas; there are no image assets in this repository.
+
+## Wire it to your agents
+
+Optional, and entirely opt-in. Nothing installs this for you.
+
+```bash
+cd bonk-box && ./scripts/install-hooks.sh
+```
+
+That adds three Claude Code hooks and a `bonk` command:
+
+| When | What he does |
+| --- | --- |
+| Your prompt sounds rough | Holds up a sign: *"Do you want to f— this agent up?"* with two buttons |
+| A tool call fails | Pops in wincing, holds the "shipping a fix..." sign |
+| The reply says "absolutely right" | Says it too |
+| You run `bonk` | Summons him. `npm test \|\| bonk` works anywhere |
+
+He slides in from the edge **without taking your keyboard**, does his bit, and
+slides back out after about eight seconds. Click him to engage properly. Taking
+focus automatically is a config flag that is off by default.
+
+### What actually leaves your machine
+
+Nothing.
+
+The word-matching happens inside the hook script, on your machine, in memory.
+Your prompt text, your tool output and your file paths never leave that script.
+The only thing that crosses localhost is one word from a fixed list of five:
+`oops`, `cheer`, `heated`, `echo-absolutely-right`, `bonk`. Nothing is logged,
+nothing is stored, and the app has no backend to send anything to.
+
+The word list is [`hooks/heated-words.txt`](hooks/heated-words.txt) — plain
+text, edit it however you like.
+
+Settings live at `~/.config/bonk-box/config.json` (port, auto-focus, and how
+often he is allowed to peek on his own).
+
+**Hooks only apply to new Claude Code sessions.** Restart Claude Code after
+installing.
+
+To undo: `./scripts/uninstall-hooks.sh`. It removes only our entries and backs
+up your settings first, same as the installer.
 
 ## Buy him a cookie
 

@@ -262,6 +262,7 @@
 
     bindPointer();
     Bonk.UI.init();
+    Bonk.Agent.init();
     window.addEventListener('resize', layout);
 
     if (Bonk.state.returning) {
@@ -336,6 +337,13 @@
       trail.length = 0;
       recordPointer(p.x, p.y);
       Bonk.Sound.start();
+      var pick = Bonk.Agent.buttonAt(p.x, p.y);
+      if (pick) {
+        if (pick === 'yes') Bonk.Agent.accept();
+        else Bonk.Agent.decline();
+        return;
+      }
+
       var tool = Bonk.state.tool;
       var def = Bonk.Tools.all[tool];
 
@@ -813,6 +821,7 @@
         Bonk.Ride.update(STEP / 1000);
         Bonk.Friend.update(STEP / 1000);
         Bonk.Gift.update(STEP / 1000);
+        Bonk.Agent.update(STEP / 1000);
         M.Engine.update(engine, STEP);
       }
 
@@ -869,6 +878,7 @@
     Bonk.Friend.draw(ctx);
     Bonk.Gift.draw(ctx);
     Bonk.Fort.drawOver(ctx);
+    Bonk.Agent.draw(ctx);
     Bonk.Particles.draw(ctx);
     ctx.restore();
     drawAim();

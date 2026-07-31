@@ -1,6 +1,6 @@
 [package]
 name = "bonk-box"
-version = "0.2.3"
+version = "0.3.0"
 description = "A stickman doodle on a sketchbook page."
 authors = ["Granular"]
 edition = "2021"
@@ -10,6 +10,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
+serde_json = "1"
 tauri-plugin-global-shortcut = "2"
 
 [profile.release]

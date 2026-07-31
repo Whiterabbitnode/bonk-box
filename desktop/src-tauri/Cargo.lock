@@ -144,8 +144,9 @@ dependencies = [
 
 [[package]]
 name = "bonk-box"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-global-shortcut",
