@@ -96,6 +96,14 @@ node test/physics-check.js   # all 16 checks
 Then look at it in a browser. The headless check catches broken; it cannot
 tell you whether something is delightful.
 
+## Known, parked
+
+- **The heated sign collides with the chrome.** At the default desktop window
+  size the placard text runs underneath the "he shipped a bug" button in the
+  top right. Either the sign wraps to the available width, or the chrome fades
+  back while a reaction is playing. Cosmetic, not a blocker; verified on the
+  live app 2026-07-31.
+
 ## Verification
 
 Use the agent-browser CLI with a unique `--session`, re-snapshot after any DOM
