@@ -24,6 +24,59 @@
   var aim = { active: false, x0: 0, y0: 0, x1: 0, y1: 0 };
   var STEP = 1000 / 60;
 
+  /* ---- fling velocity ---------------------------------------------------
+     A trackpad user slows down or pauses for a beat before lifting a finger.
+     Reading the velocity at the instant of release therefore reads roughly
+     zero, and he plops onto the floor instead of flying - which was exactly
+     the bug. So keep a short trail of where the pointer has been and fling
+     him with the FASTEST movement in that window, not the last one. */
+  var TRAIL_MS = 140; // how far back we look
+  var PEAK_OVER_MS = 34; // smoothing baseline, so one jittery sample cannot win
+  var FLING_MULTIPLIER = 1.45;
+  var FLING_MAX = 26; // px per step, matches the ragdoll's own speed cap
+  var trail = [];
+
+  function recordPointer(x, y) {
+    var now = performance.now();
+    trail.push({ x: x, y: y, t: now });
+    while (trail.length > 2 && now - trail[0].t > TRAIL_MS) trail.shift();
+  }
+
+  /* Peak speed inside the trail, in Matter's px-per-step units. */
+  function flingVelocity() {
+    if (trail.length < 2) return { x: 0, y: 0, speed: 0 };
+    var best = { x: 0, y: 0, speed: 0 };
+    for (var i = trail.length - 1; i > 0; i--) {
+      /* Compare each sample against one about PEAK_OVER_MS earlier so the
+         measurement is a swipe, not a single noisy frame. */
+      var j = i - 1;
+      while (j > 0 && trail[i].t - trail[j].t < PEAK_OVER_MS) j--;
+      var dt = trail[i].t - trail[j].t;
+      if (dt < 8) continue;
+      var vx = ((trail[i].x - trail[j].x) / dt) * STEP;
+      var vy = ((trail[i].y - trail[j].y) / dt) * STEP;
+      var sp = Math.hypot(vx, vy);
+      if (sp > best.speed) best = { x: vx, y: vy, speed: sp };
+    }
+    return best;
+  }
+
+  /* The whole figure leaves the hand together. Setting it on the grabbed limb
+     alone just lets the other ten bodies drag it back, the same way the
+     trampoline did nothing until it launched all of him. */
+  function launchBuddy(v) {
+    var speed = Math.hypot(v.x, v.y) * FLING_MULTIPLIER;
+    if (speed < 1.5) return 0;
+    var scale = (Math.min(speed, FLING_MAX) / speed) * FLING_MULTIPLIER;
+    var B = Bonk.Buddy;
+    B.goRagdoll(0.9);
+    for (var i = 0; i < B.bodies.length; i++) {
+      M.Body.setVelocity(B.bodies[i], { x: v.x * scale, y: v.y * scale });
+    }
+    M.Body.setAngularVelocity(B.parts.chest, Bonk.clamp(v.x * 0.012, -0.4, 0.4));
+    return Math.min(speed, FLING_MAX);
+  }
+
   /* Slingshot: drag away from the anchor, and it flies the opposite way. */
   var MAX_LAUNCH = 24;
   function launchVelocity() {
@@ -125,10 +178,10 @@
     M.Events.on(mouseConstraint, 'enddrag', function (e) {
       if (e.body && e.body.isBuddy) {
         grabbedBuddy = false;
-        /* A small kick on release makes the fling arc read as a throw. */
-        M.Body.setVelocity(e.body, { x: e.body.velocity.x * 1.25, y: e.body.velocity.y * 1.25 });
-        Bonk.Buddy.goRagdoll(0.3);
-        Bonk.Sound.whoosh();
+        var v = flingVelocity();
+        var launched = launchBuddy(v);
+        if (launched > 6) Bonk.Sound.whoosh();
+        else Bonk.Buddy.goRagdoll(0.3);
       }
     });
 
@@ -197,6 +250,7 @@
       pt.x = p.x;
       pt.y = p.y;
       pt.inside = true;
+      recordPointer(p.x, p.y);
       if (aim.active) {
         aim.x1 = p.x;
         aim.y1 = p.y;
@@ -214,6 +268,8 @@
       pt.y = p.y;
       pt.down = true;
       pt.inside = true;
+      trail.length = 0;
+      recordPointer(p.x, p.y);
       Bonk.Sound.start();
       var tool = Bonk.state.tool;
       var def = Bonk.Tools.all[tool];
@@ -228,7 +284,11 @@
         aim.y1 = aim.y0;
         return;
       }
-      if (tool !== 'hand' && tool !== 'feather') {
+      if (tool === 'hand') {
+        grabNearestPart(p);
+        return;
+      }
+      if (tool !== 'feather') {
         Bonk.Tools.use(tool, Bonk.clamp(p.x, room.left + 30, room.right - 30), Bonk.clamp(p.y, room.top + 30, room.bottom - 30));
       }
     });
@@ -248,6 +308,39 @@
     canvas.addEventListener('touchmove', function (e) {
       e.preventDefault();
     }, { passive: false });
+  }
+
+  /* A stickman is a few thin lines, which is unfair to aim at on a trackpad.
+     Grab whichever part is nearest within a generous radius, preferring the
+     torso and head so a grab near his middle feels deliberate. */
+  var GRAB_RADIUS = 46;
+  var GRAB_BIAS = { chest: 16, pelvis: 12, head: 10 };
+
+  function grabNearestPart(p) {
+    var B = Bonk.Buddy;
+    if (!B.parts) return;
+    var best = null;
+    var bestScore = 1e9;
+    for (var i = 0; i < B.bodies.length; i++) {
+      var b = B.bodies[i];
+      var d = Math.hypot(b.position.x - p.x, b.position.y - p.y);
+      var score = d - (GRAB_BIAS[b.partName] || 0);
+      if (d < GRAB_RADIUS && score < bestScore) {
+        bestScore = score;
+        best = b;
+      }
+    }
+    if (!best) return;
+
+    /* Hand the body straight to the mouse constraint; its own update() will
+       carry on dragging whatever is already attached. */
+    var c = mouseConstraint.constraint;
+    c.pointA = mouse.position;
+    c.bodyB = mouseConstraint.body = best;
+    c.pointB = { x: p.x - best.position.x, y: p.y - best.position.y };
+    c.angleB = best.angle;
+    grabbedBuddy = true;
+    Bonk.Buddy.say(Bonk.pick(['whoa', 'hey!', 'up we go', 'careful']), 1.2);
   }
 
   /* The hand pushes when it is near him and moving; the feather tickles. */
@@ -630,6 +723,13 @@
          fast flick cannot be applied three times over. */
       handleHover(dts);
       mouseConstraint.collisionFilter.mask = st.tool === 'hand' ? 0xffffffff : 0;
+      /* Firm up the grab as the hand speeds up, so he tracks the cursor
+         instead of lagging behind it and losing the swipe. Kept soft at rest
+         for the rubbery feel. */
+      if (grabbedBuddy) {
+        var handSpeed = flingVelocity().speed;
+        mouseConstraint.constraint.stiffness = Bonk.clamp(0.11 + handSpeed * 0.02, 0.11, 0.35);
+      }
       if (grabbedBuddy) Bonk.Buddy.goRagdoll(0.12);
       Bonk.state.pointer.vx *= 0.55;
       Bonk.state.pointer.vy *= 0.55;
