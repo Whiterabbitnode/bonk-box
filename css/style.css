@@ -78,10 +78,23 @@ body {
 }
 
 .hud-bottom {
-  left: 50%;
+  /* Spans the page and centres its contents rather than shrinking to fit from
+     the middle. Anchoring at left:50% capped the available width at half the
+     page, so the pencil case ran out of room at nine tools and wrapped into a
+     tower instead of using the width it could see. */
+  left: 0;
+  right: 0;
   bottom: 34px;
-  transform: translateX(-50%);
+  justify-content: center;
   align-items: flex-end;
+  padding: 0 12px;
+  --tool: 50px;
+  /* The bar itself is only a ruler; the things on it take the clicks. */
+  pointer-events: none;
+}
+
+.hud-bottom > * {
+  pointer-events: auto;
 }
 
 /* ---- name tag + gauges ------------------------------------------------ */
@@ -302,6 +315,8 @@ body {
 /* ---- tool tray --------------------------------------------------------- */
 .tray {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 7px;
   padding: 9px 11px;
   background: rgba(250, 247, 242, 0.88);
@@ -312,8 +327,8 @@ body {
 
 .tool {
   position: relative;
-  width: 50px;
-  height: 50px;
+  width: var(--tool);
+  height: var(--tool);
   display: grid;
   place-items: center;
   background: transparent;
@@ -325,8 +340,8 @@ body {
 }
 
 .tool svg {
-  width: 27px;
-  height: 27px;
+  width: calc(var(--tool) * 0.54);
+  height: calc(var(--tool) * 0.54);
   fill: none;
   stroke: currentColor;
   stroke-width: 1.9;
@@ -351,7 +366,7 @@ body {
   right: 3px;
   bottom: 1px;
   font-family: var(--hand);
-  font-size: 11px;
+  font-size: clamp(9px, calc(var(--tool) * 0.24), 11px);
   color: var(--pencil);
   pointer-events: none;
 }
@@ -379,11 +394,11 @@ body {
 }
 
 .tray-add {
-  width: 50px;
-  height: 50px;
+  width: var(--tool);
+  height: var(--tool);
   margin-left: 9px;
   font-family: var(--hand);
-  font-size: 30px;
+  font-size: calc(var(--tool) * 0.6);
   line-height: 1;
   color: var(--ink);
   background: rgba(250, 247, 242, 0.88);
@@ -670,12 +685,11 @@ body.compact .footer {
     max-width: 190px;
   }
 
-  .tool {
-    width: 44px;
-    height: 44px;
-  }
-
+  /* A narrow page starts the pencils smaller. This sets the starting size
+     rather than the width itself, because fitTray has the final say and a
+     hard width here would quietly beat it. */
   .hud-bottom {
+    --tool: 44px;
     bottom: 26px;
   }
 }

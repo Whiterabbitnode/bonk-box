@@ -7,6 +7,8 @@
 // it, and nothing is written to disk.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod heat;
+
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -438,6 +440,9 @@ fn serve(app: AppHandle, port: u16) {
                     ));
                 }
                 let _ = app.emit("bonk-event", kind.clone());
+                if kind == "heated" {
+                    heat::note_heated(&app);
+                }
                 if may_peek(&kind) {
                     peek(&app, &kind);
                 }
@@ -637,6 +642,11 @@ fn stand_down(app: AppHandle) {
     release_hold(&app);
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
+        // Answering him activated the application, so hiding only the window
+        // leaves your keystrokes going to a toy that is no longer on screen.
+        // Hiding the app hands the keyboard back to whatever you were using.
+        #[cfg(target_os = "macos")]
+        let _ = app.hide();
         // Resize only once he is out of sight, then leave him somewhere sane
         // so a later show can never reveal a window hanging off the edge.
         set_compact(&app, false);
@@ -711,7 +721,14 @@ fn main() {
             last_event: Mutex::new(Instant::now()),
             hold_until: Mutex::new(Instant::now()),
         })
-        .invoke_handler(tauri::generate_handler![set_engaged, apply_update, stand_down, hold_peek, defer_update_check])
+        .invoke_handler(tauri::generate_handler![
+            set_engaged,
+            apply_update,
+            stand_down,
+            hold_peek,
+            defer_update_check,
+            heat::heat_tally
+        ])
         .setup(move |app| {
             let show_hide = MenuItem::with_id(app, "toggle", "Show / Hide", true, None::<&str>)?;
             let updates = MenuItem::with_id(app, "updates", "Check for Updates", true, None::<&str>)?;
@@ -775,6 +792,7 @@ fn main() {
 
             check_for_updates(app.handle().clone(), false);
             watch_visibility(app.handle().clone());
+            heat::start(app.handle().clone());
 
             Ok(())
         })

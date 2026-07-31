@@ -280,7 +280,14 @@
     bindPointer();
     Bonk.UI.init();
     Bonk.Agent.init();
-    window.addEventListener('resize', layout);
+    Bonk.Heat.init();
+    window.addEventListener('resize', function () {
+      layout();
+      /* The pencil case is sized to the page, so it has to be re-fitted
+         whenever the page changes shape - including the shell shrinking him
+         into the small box and letting him back out again. */
+      Bonk.UI.fitTray();
+    });
 
     if (Bonk.state.returning) {
       window.setTimeout(function () {
@@ -835,6 +842,7 @@
         Bonk.Friend.update(STEP / 1000);
         Bonk.Gift.update(STEP / 1000);
         Bonk.Agent.update(STEP / 1000);
+        Bonk.Heat.update(STEP / 1000);
         M.Engine.update(engine, STEP);
       }
 
@@ -891,6 +899,7 @@
     Bonk.Friend.draw(ctx);
     Bonk.Gift.draw(ctx);
     Bonk.Fort.drawOver(ctx);
+    Bonk.Heat.draw(ctx);
     Bonk.Agent.draw(ctx);
     Bonk.Particles.draw(ctx);
     ctx.restore();

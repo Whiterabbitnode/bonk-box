@@ -265,6 +265,76 @@ installing.
 To undo: `./scripts/uninstall-hooks.sh`. It removes only our entries and backs
 up your settings first, same as the installer.
 
+## He counts how often you get heated
+
+Under the name tag there is a small pencil tally: how many times today, this
+week, and since you installed him. It is the same word list the hook uses, so
+"heated" means the same thing whether he noticed it live or found it later.
+
+He never opens a window to tell you about it. The tally is only there when he
+is already on screen for a reason you allowed, and occasionally he says
+something dry about it while you are looking at him.
+
+### Exactly what it reads, and exactly what it keeps
+
+To have a number for the days before you installed him, he reads the coding
+transcripts already on your machine:
+
+| Source        | Directory read                   | On by default |
+| ------------- | -------------------------------- | ------------- |
+| `claude-code` | `~/.claude/projects/**/*.jsonl`  | yes           |
+| `codex-cli`   | `~/.codex/sessions/**/*.jsonl`   | no            |
+
+Only prompts **you typed** are counted. Tool output, injected context, messages
+from other agents and your editor's own housekeeping prompts all wear the same
+"user" label in those files and are all skipped.
+
+Codex is off by default, and the reason is arithmetic rather than taste. Its
+transcripts do not record where a prompt came from, and a fleet that dispatches
+one instruction to fifty parallel sessions writes it into fifty files. Measured
+on the machine this was built on: 454 matches from 110 distinct prompts, one of
+them landing in 76 separate transcripts. Claude Code labels its prompts, and
+the same measurement there was 221 matches from 217 distinct prompts. Counting
+your agents' arguments as your own temper would make the number a lie.
+
+**What is written to disk, in full:**
+
+- `~/.config/bonk-box/heat/tally.json` — dates and counts. About a kilobyte.
+- `~/.config/bonk-box/heat/cursor.json` — how far each file has been read, so
+  it never reads the same bytes twice. Keyed by a hash of the path, so not even
+  the paths are recorded.
+
+No prompt text. No excerpts. No file names, project names or paths. The text is
+matched in memory and dropped as the line is read. **Nothing leaves your
+machine** — there is no network call in any of it, and still no backend to send
+anything to.
+
+It reads in short slices with long gaps and picks up where it left off, so a
+first pass over a large history finishes quietly in the background over a few
+minutes and after that there is almost nothing left to do.
+
+### Turning it off
+
+```json
+{
+  "heatTracking": false
+}
+```
+
+Or leave it on and choose your sources:
+
+```json
+{
+  "heatSources": [
+    { "id": "claude-code", "enabled": true },
+    { "id": "codex-cli", "enabled": true }
+  ]
+}
+```
+
+Turning it off stops the reading and the counting. To forget what it already
+counted, delete `~/.config/bonk-box/heat/`.
+
 ## Updating
 
 He checks once a day and tells you himself: a sign saying the new version is

@@ -162,6 +162,42 @@
         });
         els.tray.appendChild(b);
       });
+      this.fitTray();
+    },
+
+    /* The pencil case has to fit in the box it is drawn in. Nineteen tools at
+       full size want eleven hundred pixels and the window is five sixty, so
+       unlocking enough of them used to push the tray straight out through the
+       walls. It wraps into at most three rows and the pencils shrink to fill
+       whatever is left, down to a floor that keeps the number hints readable
+       and the buttons worth aiming at. */
+    fitTray: function () {
+      if (!els.tray) return;
+      var count = els.tray.children.length;
+      if (!count) return;
+      var stage = document.getElementById('stage');
+      var GAP = 7;
+      /* Padding and both borders, which box-sizing keeps inside the width -
+         forgetting the four pixels of border put every row one pencil over
+         the edge and wrapped a tidy two rows into four. */
+      var PAD = 22 + 4 + 2;
+      var ADD = 59; // the + button and its margin
+      var MAX = 50;
+      var MIN = 34;
+      var FLOOR = 28; // below this the number hints stop being readable
+      var avail = Math.max(150, (stage ? stage.clientWidth : 560) - 28 - ADD);
+      var size = MIN;
+      for (var rows = 1; rows <= 3; rows++) {
+        var perRow = Math.ceil(count / rows);
+        var fits = (avail - PAD - (perRow - 1) * GAP) / perRow;
+        if (fits >= MIN || rows === 3) {
+          size = Math.max(FLOOR, Math.min(MAX, Math.floor(fits)));
+          break;
+        }
+      }
+      var hud = els.tray.parentNode || els.tray; // the + button scales with them
+      hud.style.setProperty('--tool', size + 'px');
+      els.tray.style.maxWidth = avail + 'px';
     },
 
     selectTool: function (id) {
