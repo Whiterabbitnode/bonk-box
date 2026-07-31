@@ -35,10 +35,10 @@
     for (var i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
   }
 
-  function env(node, t0, peak, attack, decay) {
+  function env(node, t0, peak, rise, decay) {
     node.gain.setValueAtTime(0.0001, t0);
-    node.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), t0 + attack);
-    node.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
+    node.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), t0 + rise);
+    node.gain.exponentialRampToValueAtTime(0.0001, t0 + rise + decay);
   }
 
   function tone(opts) {
@@ -56,12 +56,12 @@
       lfoGain.gain.value = opts.wobbleDepth || 30;
       lfo.connect(lfoGain).connect(osc.frequency);
       lfo.start(t0);
-      lfo.stop(t0 + (opts.attack || 0.01) + (opts.decay || 0.2) + 0.05);
+      lfo.stop(t0 + (opts.rise || 0.01) + (opts.decay || 0.2) + 0.05);
     }
-    env(gain, t0, opts.gain == null ? 0.3 : opts.gain, opts.attack || 0.008, opts.decay || 0.2);
+    env(gain, t0, opts.gain == null ? 0.3 : opts.gain, opts.rise || 0.008, opts.decay || 0.2);
     osc.connect(gain).connect(master);
     osc.start(t0);
-    osc.stop(t0 + (opts.attack || 0.008) + (opts.decay || 0.2) + 0.05);
+    osc.stop(t0 + (opts.rise || 0.008) + (opts.decay || 0.2) + 0.05);
   }
 
   function noise(opts) {
@@ -75,7 +75,7 @@
     if (opts.to != null) filter.frequency.exponentialRampToValueAtTime(Math.max(60, opts.to), t0 + (opts.decay || 0.2));
     filter.Q.value = opts.q == null ? 1.2 : opts.q;
     var gain = ctx.createGain();
-    env(gain, t0, opts.gain == null ? 0.22 : opts.gain, opts.attack || 0.005, opts.decay || 0.2);
+    env(gain, t0, opts.gain == null ? 0.22 : opts.gain, opts.rise || 0.005, opts.decay || 0.2);
     src.connect(filter).connect(gain).connect(master);
     src.start(t0);
     src.stop(t0 + (opts.decay || 0.2) + 0.1);

@@ -129,7 +129,7 @@ var lowest = Math.min.apply(null, hs);
 check('idle height does not drift', drift < 8, 'mean head height moved ' + drift.toFixed(2) + 'px over 6s');
 check('never collapses while idle', lowest > STAND_HEAD * 0.6, 'lowest head height ' + lowest.toFixed(1) + 'px of ' + STAND_HEAD.toFixed(1) + 'px upright');
 
-/* ---- 2. a hard fling ragdolls and does not explode -------------------- */
+/* ---- 2. a hard fling ragdolls without coming apart -------------------- */
 Matter.Body.setVelocity(buddy.parts.chest, { x: 26, y: -19 });
 Matter.Body.setAngularVelocity(buddy.parts.chest, 0.5);
 buddy.bonk('chest', 30, { x: buddy.parts.chest.position.x, y: buddy.parts.chest.position.y });
