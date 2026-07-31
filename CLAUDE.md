@@ -143,6 +143,15 @@ Rebuild with `cd desktop && npm run build`. Builds on this machine are arm64.
 
 ## Releasing
 
+**NEVER re-cut a release under a version that already shipped.** Every rebuild
+that reaches anyone gets a new version number, no exceptions. Installs update
+themselves by comparing their own version to the latest tag, so version
+identity is load-bearing: re-cutting v0.4.0 with new content left anyone
+holding the first v0.4.0 build permanently unable to see the fix, because their
+copy compares equal to the latest and offers nothing. A wasted version number
+costs nothing. A duplicated one strands people.
+
+
 1. `cd desktop && npm run build`
 2. `ditto -c -k --keepParent "src-tauri/target/release/bundle/macos/Bonk Box.app" "Bonk Box.app.zip"`
    — `ditto` rather than `zip`, to keep the bundle intact
