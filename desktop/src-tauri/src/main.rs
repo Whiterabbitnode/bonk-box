@@ -575,6 +575,11 @@ fn peek(app: &AppHandle, kind: &str) {
         // has to mean zero pixels, and hiding also means the window can never
         // be left living outside every screen.
         let _ = window.hide();
+        // Put him back to full size now he is out of sight. A retreat used to
+        // leave the small box behind as the window's real size, so it was
+        // whatever showed him next that had to remember to undo it. Every
+        // path that hides him now hands back the same shape.
+        set_compact(&app, false);
         let _ = app.emit("bonk-retreat", ());
     });
 }
@@ -789,6 +794,15 @@ fn main() {
                     eprintln!("Bonk Box: Opt+Cmd+B is already spoken for, carrying on without it ({err})");
                 }
             }
+
+            // A launch always looks the same: the whole toy, in the middle of
+            // the screen. Nothing about how he was last used is inherited -
+            // not a size left behind by a peek, not a corner he retreated to,
+            // not anything a window manager decided to restore. Stating it
+            // outright is cheaper than trusting every path that could have
+            // left him small.
+            set_compact(&app.handle().clone(), false);
+            center_on_primary(&app.handle().clone());
 
             // A saved position from a previous run can land off every screen.
             ensure_on_screen(&app.handle().clone());
