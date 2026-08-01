@@ -626,12 +626,6 @@ fn toggle(app: &AppHandle) {
         let _ = window.hide();
     } else {
         state.user_opened.store(true, Ordering::SeqCst);
-        // On macOS, hiding the only window also tucks the application away, and
-        // window.show() on its own will not bring it back - the app has to be
-        // unhidden first or the hotkey looks like it only works once. Taking
-        // focus here is correct: you asked for him.
-        #[cfg(target_os = "macos")]
-        let _ = app.show();
         set_compact(app, false);
         // In the middle, not in the corner. This used to reuse the peek perch,
         // so summoning him parked the whole toy up in the top-right where the
@@ -639,6 +633,17 @@ fn toggle(app: &AppHandle) {
         // because the window had never been moved off the centre it opens on.
         center_on_primary(app);
         ensure_on_screen(app);
+        // On macOS, hiding the only window also tucks the application away, and
+        // window.show() on its own will not bring it back - the app has to be
+        // unhidden first or the hotkey looks like it only works once. Taking
+        // focus here is correct: you asked for him.
+        //
+        // It happens HERE, one line before the window appears, rather than at
+        // the top of this branch. Unhiding the application can put its windows
+        // back on screen, and doing that before the size and the position are
+        // settled is how a summon flashes at wherever he was last.
+        #[cfg(target_os = "macos")]
+        let _ = app.show();
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
@@ -858,6 +863,15 @@ fn main() {
             app.state::<PeekState>()
                 .user_opened
                 .store(true, Ordering::SeqCst);
+
+            // Only now does he appear, and this is why the window is built
+            // hidden. Letting it open visible and tidying it afterwards means
+            // the first thing painted is wherever it happened to land, and the
+            // size and the centring arrive a frame or two later as a jump you
+            // can see. Nothing shows until the shape is already right.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+            }
 
             check_for_updates(app.handle().clone(), false);
             watch_visibility(app.handle().clone());
