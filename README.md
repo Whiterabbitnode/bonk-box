@@ -309,6 +309,12 @@ matched in memory and dropped as the line is read. **Nothing leaves your
 machine** — there is no network call in any of it, and still no backend to send
 anything to.
 
+One honest caveat about today's number: the live half of the count is whatever
+the app was told, so anything that sends a `heated` event counts — including
+you testing your own hooks. If you have been poking at the wiring, today reads
+a little high. The scanned half only ever counts prompts that are really in
+your transcripts.
+
 It reads in short slices with long gaps and picks up where it left off, so a
 first pass over a large history finishes quietly in the background over a few
 minutes and after that there is almost nothing left to do.

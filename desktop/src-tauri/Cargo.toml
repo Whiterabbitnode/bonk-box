@@ -1,6 +1,6 @@
 [package]
 name = "bonk-box"
-version = "0.5.2"
+version = "0.5.3"
 description = "A stickman doodle on a sketchbook page."
 authors = ["Granular"]
 edition = "2021"

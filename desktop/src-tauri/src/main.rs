@@ -470,11 +470,43 @@ fn serve(app: AppHandle, port: u16) {
     }
 }
 
+/// Is he on your screen because you asked for him? Launching him, the hotkey,
+/// a bonk, and clicking into a peek all count.
+fn window_is_yours(app: &AppHandle) -> bool {
+    let Some(window) = app.get_webview_window("main") else {
+        return false;
+    };
+    let state = app.state::<PeekState>();
+    window.is_visible().unwrap_or(false)
+        && (state.user_opened.load(Ordering::SeqCst) || state.engaged.load(Ordering::SeqCst))
+}
+
 /// Slide him into view for a look, then slide him back out.
 fn peek(app: &AppHandle, kind: &str) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
+
+    // A box you opened is YOURS. Anything he wants to say while you are
+    // already looking at him is a guest in it: the sign goes up where he
+    // stands, at the size you opened him at, in the place you put him. He does
+    // not shrink himself into the corner box and take the window with him -
+    // that is how an offer used to yank the whole toy away mid-play, and it is
+    // what made a launch look like it booted small. The corner box is for
+    // visits he pays himself, when you were not looking in the first place.
+    if window_is_yours(app) {
+        let state = app.state::<PeekState>();
+        if let Ok(mut t) = state.last_event.lock() {
+            *t = Instant::now();
+        }
+        let floor = Instant::now() + Duration::from_secs(peek_seconds(kind));
+        if let Ok(mut h) = state.hold_until.lock() {
+            if floor > *h {
+                *h = floor;
+            }
+        }
+        return;
+    }
 
     // If the app was properly hidden, bring the window back WITHOUT activating
     // it: no app.show(), no set_focus. Ordering it front is enough to be seen.
@@ -660,6 +692,17 @@ fn defer_update_check(_app: AppHandle) {
 /// retreating - which is exactly why he used to linger after "I'm calm".
 #[tauri::command]
 fn stand_down(app: AppHandle) {
+    // Lowering a sign is not a reason to close a window you asked for. If the
+    // ask went up inside your own box, answering it - or letting it run out -
+    // takes away the sign and nothing else. Only a visit he paid himself ends
+    // with him leaving, and that one still has to mean zero pixels.
+    if window_is_yours(&app) {
+        let state = app.state::<PeekState>();
+        state.engaged.store(false, Ordering::SeqCst);
+        release_hold(&app);
+        return;
+    }
+
     let state = app.state::<PeekState>();
     state.engaged.store(false, Ordering::SeqCst);
     state.sliding.store(false, Ordering::SeqCst);
