@@ -130,6 +130,24 @@ fn perch_for(app: &AppHandle) -> Option<Perch> {
     })
 }
 
+/// Put him in the middle of the primary screen.
+///
+/// Asking for him is not the same as him dropping by. The corner perch is for
+/// visits he pays himself; anything you asked for belongs in front of you.
+/// Call this AFTER `set_compact`, so the window is already its full size when
+/// the centre is worked out - measuring first centres the small box's width
+/// and leaves him sitting off to one side.
+fn center_on_primary(app: &AppHandle) {
+    let Some(monitor) = primary(app) else { return };
+    let Some(window) = app.get_webview_window("main") else { return };
+    let Ok(size) = window.outer_size() else { return };
+    let origin = monitor.position();
+    let screen = monitor.size();
+    let x = origin.x + (screen.width as i32 - size.width as i32) / 2;
+    let y = origin.y + (screen.height as i32 - size.height as i32) / 2;
+    let _ = window.set_position(PhysicalPosition::new(x, y));
+}
+
 /// Ambient events get the small box; you asking for him gets the whole toy.
 fn set_compact(app: &AppHandle, compact: bool) {
     let Some(window) = app.get_webview_window("main") else { return };
@@ -578,9 +596,11 @@ fn toggle(app: &AppHandle) {
         #[cfg(target_os = "macos")]
         let _ = app.show();
         set_compact(app, false);
-        if let Some(perch) = perch_for(app) {
-            let _ = window.set_position(perch.shown);
-        }
+        // In the middle, not in the corner. This used to reuse the peek perch,
+        // so summoning him parked the whole toy up in the top-right where the
+        // ambient box lives. The first summon after launch looked right only
+        // because the window had never been moved off the centre it opens on.
+        center_on_primary(app);
         ensure_on_screen(app);
         let _ = window.show();
         let _ = window.unminimize();
@@ -686,17 +706,9 @@ fn set_engaged(app: AppHandle, engaged: bool) {
         // You clicked into him, so he gets the whole box and may take focus.
         state.user_opened.store(true, Ordering::SeqCst);
         set_compact(&app, false);
-        if let Some(m) = primary(&app) {
-            if let Some(window) = app.get_webview_window("main") {
-                if let Ok(size) = window.outer_size() {
-                    let o = m.position();
-                    let s = m.size();
-                    let x = o.x + (s.width as i32 - size.width as i32) / 2;
-                    let y = o.y + (s.height as i32 - size.height as i32) / 2;
-                    let _ = window.set_position(PhysicalPosition::new(x, y));
-                }
-                let _ = window.set_focus();
-            }
+        center_on_primary(&app);
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.set_focus();
         }
         ensure_on_screen(&app);
     } else {
